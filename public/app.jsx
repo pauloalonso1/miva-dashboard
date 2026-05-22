@@ -2110,11 +2110,12 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
           ) : (
             <div className="produto-grid">
               {produtosFiltrados.map(p => {
-                const margem = margemPercentual(p.custo, p.preco);
-                const baixo = p.estoque <= ESTOQUE_BAIXO && p.estoque > 0;
-                const out   = p.estoque === 0;
+                const temCusto = p.custo > 0;
+                const margem   = temCusto ? margemPercentual(p.custo, p.preco) : null;
+                const baixo    = p.estoque > 0 && p.estoque <= ESTOQUE_BAIXO;
+                const out      = p.estoque === 0;
                 return (
-                  <div key={p.id} className={'produto-card' + (out ? ' out-stock' : baixo ? ' low-stock' : '')}>
+                  <div key={p.id} className={'produto-card' + (out ? ' out-stock' : '')}>
                     <div className="produto-img-wrap">
                       {p.imagemUrl ? (
                         <img src={p.imagemUrl} alt={p.nome} loading="lazy"
@@ -2134,7 +2135,7 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
                         {out ? (
                           <span className="chip danger"><span className="chip-dot"/>esgotado</span>
                         ) : baixo ? (
-                          <span className="chip warn"><span className="chip-dot"/>estoque baixo</span>
+                          <span className="chip warn" style={{fontSize:10}}><span className="chip-dot"/>{p.estoque} un.</span>
                         ) : null}
                       </div>
 
@@ -2145,9 +2146,13 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
                         </div>
                         <div>
                           <div className="produto-stat-lbl">Margem</div>
-                          <div className="produto-stat-val" style={{color: margem >= 40 ? 'var(--emerald)' : margem >= 20 ? 'var(--ink)' : 'var(--danger)'}}>
-                            {margem.toFixed(0)}%
-                          </div>
+                          {margem !== null ? (
+                            <div className="produto-stat-val" style={{color: margem >= 40 ? 'var(--emerald)' : margem >= 20 ? 'var(--ink)' : 'var(--danger)'}}>
+                              {margem.toFixed(0)}%
+                            </div>
+                          ) : (
+                            <div className="produto-stat-val" style={{color:'var(--ink-3)', fontSize:12}}>sem custo</div>
+                          )}
                         </div>
                         <div>
                           <div className="produto-stat-lbl">Estoque</div>
