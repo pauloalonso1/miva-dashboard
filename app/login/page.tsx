@@ -11,6 +11,7 @@ function LoginForm() {
 
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
+  const [showSenha, setShowSenha] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -76,38 +77,11 @@ function LoginForm() {
           margin-bottom: 2.5rem;
         }
 
-        .logo-icon {
-          width: 64px;
+        .logo-area img {
           height: 64px;
-          background: linear-gradient(135deg, #B8924B, #D4A96A);
-          border-radius: 50%;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 1rem;
-          box-shadow: 0 4px 16px rgba(184, 146, 75, 0.3);
-        }
-
-        .logo-icon svg {
-          width: 32px;
-          height: 32px;
-          fill: white;
-        }
-
-        .logo-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 2rem;
-          font-weight: 500;
-          color: #2D2D2D;
-          letter-spacing: 0.08em;
-        }
-
-        .logo-subtitle {
-          font-size: 0.7rem;
-          color: #B8924B;
-          letter-spacing: 0.15em;
-          text-transform: uppercase;
-          margin-top: 0.25rem;
+          width: auto;
+          display: inline-block;
+          filter: sepia(15%) saturate(110%) hue-rotate(-5deg);
         }
 
         .form-group {
@@ -124,8 +98,24 @@ function LoginForm() {
           margin-bottom: 0.5rem;
         }
 
-        input[type="text"],
-        input[type="password"] {
+        .input-wrap {
+          position: relative;
+        }
+
+        .input-wrap input {
+          width: 100%;
+          padding: 0.75rem 2.75rem 0.75rem 1rem;
+          border: 1px solid #E8DCC8;
+          border-radius: 8px;
+          font-family: 'Montserrat', sans-serif;
+          font-size: 0.9rem;
+          color: #2D2D2D;
+          background: #FDFAF5;
+          transition: border-color 0.2s, box-shadow 0.2s;
+          outline: none;
+        }
+
+        input[type="text"] {
           width: 100%;
           padding: 0.75rem 1rem;
           border: 1px solid #E8DCC8;
@@ -138,12 +128,29 @@ function LoginForm() {
           outline: none;
         }
 
-        input[type="text"]:focus,
-        input[type="password"]:focus {
+        .input-wrap input:focus,
+        input[type="text"]:focus {
           border-color: #B8924B;
           box-shadow: 0 0 0 3px rgba(184, 146, 75, 0.1);
           background: #fff;
         }
+
+        .eye-btn {
+          position: absolute;
+          right: 0.75rem;
+          top: 50%;
+          transform: translateY(-50%);
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 4px;
+          color: #999;
+          display: flex;
+          align-items: center;
+          transition: color 0.15s;
+        }
+
+        .eye-btn:hover { color: #B8924B; }
 
         .remember-row {
           display: flex;
@@ -193,14 +200,9 @@ function LoginForm() {
           transform: translateY(-1px);
         }
 
-        .btn-login:active {
-          transform: translateY(0);
-        }
+        .btn-login:active { transform: translateY(0); }
 
-        .btn-login:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
+        .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .error-msg {
           background: #FFF0F0;
@@ -217,13 +219,7 @@ function LoginForm() {
       <div className="login-wrapper">
         <div className="login-card">
           <div className="logo-area">
-            <div className="logo-icon">
-              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-              </svg>
-            </div>
-            <div className="logo-title">Miva</div>
-            <div className="logo-subtitle">Gestao de Joias</div>
+            <img src="/assets/logo-miva.png" alt="Miva" />
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -244,14 +240,35 @@ function LoginForm() {
 
             <div className="form-group">
               <label htmlFor="senha">Senha</label>
-              <input
-                id="senha"
-                type="password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
+              <div className="input-wrap">
+                <input
+                  id="senha"
+                  type={showSenha ? 'text' : 'password'}
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="eye-btn"
+                  onClick={() => setShowSenha(v => !v)}
+                  aria-label={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  {showSenha ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                      <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             <label className="remember-row" htmlFor="rememberMe">

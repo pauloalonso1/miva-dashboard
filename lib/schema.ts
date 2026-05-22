@@ -17,6 +17,7 @@ export const produtos = pgTable('produtos', {
   preco:               numeric('preco', { precision: 10, scale: 2 }).notNull(),
   estoque:             integer('estoque').notNull().default(0),
   fornecedor:          text('fornecedor'),
+  imagemUrl:           text('imagem_url'),
   nuvemshopProductId:  text('nuvemshop_product_id'),
   createdAt:           timestamp('created_at').defaultNow().notNull(),
   updatedAt:           timestamp('updated_at').defaultNow().notNull(),

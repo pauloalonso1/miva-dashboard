@@ -632,13 +632,37 @@ input, select, textarea { font-family: inherit; color: inherit; }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  padding: 18px;
-  display: flex; flex-direction: column; gap: 12px;
-  transition: border-color .15s ease, transform .15s ease;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
-.produto-card:hover { border-color: var(--line-2); }
-.produto-card.low-stock { border-color: var(--warn); background: linear-gradient(180deg, var(--warn-soft) 0%, var(--surface) 30%); }
-.produto-card.out-stock { border-color: var(--danger); background: linear-gradient(180deg, var(--danger-soft) 0%, var(--surface) 30%); }
+.produto-card:hover { border-color: var(--line-2); box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+.produto-card.low-stock { border-color: var(--warn); }
+.produto-card.out-stock { border-color: var(--danger); }
+.produto-img-wrap {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--surface-2);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.produto-img-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .3s ease;
+}
+.produto-card:hover .produto-img-wrap img { transform: scale(1.04); }
+.produto-img-placeholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink-3); font-size: 32px;
+}
+.produto-card-body {
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  flex: 1;
+}
 .produto-name {
   font-family: var(--serif);
   font-size: 19px;
@@ -1799,46 +1823,54 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir }) {
                 const out   = p.estoque === 0;
                 return (
                   <div key={p.id} className={'produto-card' + (out ? ' out-stock' : baixo ? ' low-stock' : '')}>
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12}}>
-                      <div>
-                        <h3 className="produto-name">{p.nome}</h3>
-                        <div className="produto-ref">{p.referencia} · {p.tipoBanho}</div>
-                      </div>
-                      {out ? (
-                        <span className="chip danger"><span className="chip-dot"/>esgotado</span>
-                      ) : baixo ? (
-                        <span className="chip warn"><span className="chip-dot"/>estoque baixo</span>
-                      ) : null}
+                    <div className="produto-img-wrap">
+                      {p.imagemUrl ? (
+                        <img src={p.imagemUrl} alt={p.nome} loading="lazy" />
+                      ) : (
+                        <div className="produto-img-placeholder">💎</div>
+                      )}
                     </div>
 
-                    <div className="produto-stats">
-                      <div>
-                        <div className="produto-stat-lbl">Preço</div>
-                        <div className="produto-stat-val">{brl(p.preco)}</div>
+                    <div className="produto-card-body">
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8}}>
+                        <div style={{flex: 1, minWidth: 0}}>
+                          <h3 className="produto-name">{p.nome}</h3>
+                          <div className="produto-ref">{p.referencia}{p.tipoBanho ? ' · ' + p.tipoBanho : ''}</div>
+                        </div>
+                        {out ? (
+                          <span className="chip danger"><span className="chip-dot"/>esgotado</span>
+                        ) : baixo ? (
+                          <span className="chip warn"><span className="chip-dot"/>estoque baixo</span>
+                        ) : null}
                       </div>
-                      <div>
-                        <div className="produto-stat-lbl">Margem</div>
-                        <div className="produto-stat-val" style={{color: margem >= 40 ? 'var(--emerald)' : margem >= 20 ? 'var(--ink)' : 'var(--danger)'}}>
-                          {margem.toFixed(0)}%
+
+                      <div className="produto-stats">
+                        <div>
+                          <div className="produto-stat-lbl">Preço</div>
+                          <div className="produto-stat-val">{brl(p.preco)}</div>
+                        </div>
+                        <div>
+                          <div className="produto-stat-lbl">Margem</div>
+                          <div className="produto-stat-val" style={{color: margem >= 40 ? 'var(--emerald)' : margem >= 20 ? 'var(--ink)' : 'var(--danger)'}}>
+                            {margem.toFixed(0)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="produto-stat-lbl">Estoque</div>
+                          <div className="produto-stat-val">{p.estoque}</div>
                         </div>
                       </div>
-                      <div>
-                        <div className="produto-stat-lbl">Estoque</div>
-                        <div className="produto-stat-val">{p.estoque}</div>
-                      </div>
-                    </div>
 
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                      <div className="stock-controls">
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                         <div className="qty">
                           <button onClick={() => onAjustar(p.id, -1)} disabled={p.estoque === 0}>−</button>
                           <span className="qty-val">{p.estoque}</span>
                           <button onClick={() => onAjustar(p.id, +1)}>+</button>
                         </div>
+                        <button className="btn btn-icon btn-danger" onClick={() => setConfirmDel(p)} aria-label="Excluir peça">
+                          <Icon name="trash" size={16}/>
+                        </button>
                       </div>
-                      <button className="btn btn-icon btn-danger" onClick={() => setConfirmDel(p)} aria-label="Excluir peça">
-                        <Icon name="trash" size={16}/>
-                      </button>
                     </div>
                   </div>
                 );

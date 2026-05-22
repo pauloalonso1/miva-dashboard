@@ -45,6 +45,7 @@ function toClient(row: typeof produtos.$inferSelect) {
     preco:      Number(row.preco),
     estoque:    row.estoque,
     fornecedor: row.fornecedor ?? '',
+    imagemUrl:  row.imagemUrl ?? null,
     nuvemshopProductId: row.nuvemshopProductId,
   };
 }

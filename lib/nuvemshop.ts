@@ -71,6 +71,7 @@ async function apiRequest<T>(
 export interface NuvemshopProduct {
   id: number;
   name: { pt: string };
+  images: Array<{ id: number; src: string; position: number }>;
   variants: Array<{
     id: number;
     price: string;
@@ -127,6 +128,7 @@ export interface NuvemshopCustomer {
   name: string;
   email: string;
   phone: string | null;
+  default_address?: { city?: string } | null;
 }
 
 export async function listCustomers(creds: NuvemshopCredentials, page = 1): Promise<NuvemshopCustomer[]> {

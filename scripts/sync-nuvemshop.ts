@@ -33,10 +33,13 @@ async function main() {
       .from(schema.produtos)
       .where(eq(schema.produtos.nuvemshopProductId, nsId));
 
+    const imagemUrl = (p.images as Array<{ src: string }>)?.[0]?.src ?? null;
+
     if (existing) {
       await db.update(schema.produtos).set({
         nome, referencia: sku,
         preco: String(preco), custo: String(custo),
+        imagemUrl,
         updatedAt: new Date(),
       }).where(eq(schema.produtos.id, existing.id));
       updated++;
@@ -49,6 +52,7 @@ async function main() {
         custo:              String(custo),
         preco:              String(preco),
         estoque:            variant.stock ?? 0,
+        imagemUrl,
         nuvemshopProductId: nsId,
       });
       created++;

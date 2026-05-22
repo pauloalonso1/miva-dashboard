@@ -40,12 +40,15 @@ export async function POST() {
         .from(produtos)
         .where(eq(produtos.nuvemshopProductId, nsId));
 
+      const imagemUrl = p.images?.[0]?.src ?? null;
+
       if (existing) {
         await db.update(produtos).set({
           nome,
           referencia: sku,
           preco:      String(preco),
           custo:      String(custo),
+          imagemUrl,
           updatedAt:  new Date(),
         }).where(eq(produtos.id, existing.id));
         updated++;
@@ -58,6 +61,7 @@ export async function POST() {
           custo:              String(custo),
           preco:              String(preco),
           estoque:            variant.stock ?? 0,
+          imagemUrl,
           nuvemshopProductId: nsId,
         });
         created++;
