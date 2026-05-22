@@ -51,7 +51,7 @@ const CSS = `
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--bg); }
+html, body { margin: 0; padding: 0; background: var(--bg); height: 100%; }
 body {
   font-family: var(--sans);
   color: var(--ink);
@@ -65,14 +65,16 @@ input, select, textarea { font-family: inherit; color: inherit; }
 
 /* ---- App shell ---- */
 .app {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-columns: 232px 1fr;
   grid-template-rows: auto 1fr;
   grid-template-areas: "side header" "side main";
+  overflow: hidden;
 }
 @media (max-width: 880px) {
   .app {
+    height: 100vh;
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr auto;
     grid-template-areas: "header" "main" "side";
@@ -86,6 +88,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
   border-bottom: 1px solid var(--line);
   padding: 16px 28px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  position: sticky; top: 0; z-index: 10;
 }
 .brand {
   display: flex; align-items: center;
@@ -124,6 +127,8 @@ input, select, textarea { font-family: inherit; color: inherit; }
   border-right: 1px solid var(--line);
   padding: 24px 16px;
   display: flex; flex-direction: column; gap: 4px;
+  overflow-y: auto;
+  height: 100%;
 }
 .nav-section {
   font-size: 10px;
@@ -165,6 +170,9 @@ input, select, textarea { font-family: inherit; color: inherit; }
     padding: 6px 6px max(6px, env(safe-area-inset-bottom));
     border-right: 0;
     border-top: 1px solid var(--line);
+    height: auto;
+    overflow-y: visible;
+    overflow-x: auto;
     position: sticky; bottom: 0;
     overflow-x: auto;
     z-index: 10;
@@ -184,7 +192,9 @@ input, select, textarea { font-family: inherit; color: inherit; }
   grid-area: main;
   padding: 28px 32px 40px;
   width: 100%;
-  min-width: 0;       /* permite que filhos com overflow respeitem o grid */
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   animation: fadeIn .35s ease both;
 }
 @media (min-width: 1600px) {
