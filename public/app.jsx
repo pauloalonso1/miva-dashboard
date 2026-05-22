@@ -653,7 +653,6 @@ input, select, textarea { font-family: inherit; color: inherit; }
   transition: transform .3s ease;
 }
 .produto-card:hover .produto-img-wrap img { transform: scale(1.04); }
-.produto-card.out-stock .produto-img-wrap img { filter: grayscale(100%); opacity: .6; }
 .produto-img-placeholder {
   width: 100%; height: 100%;
   display: flex; align-items: center; justify-content: center;
@@ -1906,12 +1905,14 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
 
   const produtosFiltrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return produtos;
-    return produtos.filter(p =>
-      p.nome.toLowerCase().includes(q) ||
-      p.referencia.toLowerCase().includes(q) ||
-      (p.tipoBanho && p.tipoBanho.toLowerCase().includes(q))
-    );
+    const lista = q
+      ? produtos.filter(p =>
+          p.nome.toLowerCase().includes(q) ||
+          p.referencia.toLowerCase().includes(q) ||
+          (p.tipoBanho && p.tipoBanho.toLowerCase().includes(q))
+        )
+      : produtos;
+    return [...lista].sort((a, b) => (b.estoque > 0 ? 1 : 0) - (a.estoque > 0 ? 1 : 0));
   }, [produtos, busca]);
 
   const submit = async (e) => {
