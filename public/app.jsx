@@ -826,21 +826,38 @@ const API = {
  *  taxa: percentual deduzido do valorBruto.
  *  permiteParcelas: se true, a UI mostra o campo "parcelas". */
 const TAXAS = {
-  pix:               { label: 'Pix',                 taxa: 0.000, permiteParcelas: false },
-  dinheiro:          { label: 'Dinheiro',            taxa: 0.000, permiteParcelas: false },
-  debito:            { label: 'Débito',              taxa: 0.015, permiteParcelas: false },
-  credito_vista:     { label: 'Crédito à vista',     taxa: 0.035, permiteParcelas: false },
-  credito_parcelado: { label: 'Crédito parcelado',   taxa: 0.065, permiteParcelas: true  },
+  pix:               { label: 'Pix',                 taxa: 0.000,  permiteParcelas: false },
+  dinheiro:          { label: 'Dinheiro',            taxa: 0.000,  permiteParcelas: false },
+  debito:            { label: 'Débito',              taxa: 0.015,  permiteParcelas: false },
+  credito_vista:     { label: 'Crédito à vista',     taxa: 0.035,  permiteParcelas: false },
+  credito_parcelado: { label: 'Crédito parcelado',   taxa: 0.0626, permiteParcelas: true  },
+};
+
+// Taxa real por número de parcelas (Nuvemshop / juros pagos pela loja)
+const TAXA_PARCELADO = {
+  2:  0.0439,
+  3:  0.0626,
+  4:  0.0813,
+  5:  0.1000,
+  6:  0.1187,
+  7:  0.1374,
+  8:  0.1561,
+  9:  0.1748,
+  10: 0.1935,
+  11: 0.2122,
+  12: 0.2309,
 };
 
 const ORDEM_PAGAMENTOS = ['pix', 'dinheiro', 'debito', 'credito_vista', 'credito_parcelado'];
 
-/** Calcula totais de uma venda a partir dos itens + forma de pagamento.
+/** Calcula totais de uma venda a partir dos itens + forma de pagamento + parcelas.
  *  Retorna { valorBruto, custoTotal, taxa (decimal), valorLiquido, lucro }. */
-function calcularVenda(itens, pagamento) {
+function calcularVenda(itens, pagamento, parcelas = 1) {
   const valorBruto = itens.reduce((s, i) => s + i.precoUnitario * i.quantidade, 0);
   const custoTotal = itens.reduce((s, i) => s + i.custoUnitario * i.quantidade, 0);
-  const taxa = TAXAS[pagamento]?.taxa ?? 0;
+  const taxa = pagamento === 'credito_parcelado'
+    ? (TAXA_PARCELADO[parcelas] ?? TAXA_PARCELADO[2])
+    : (TAXAS[pagamento]?.taxa ?? 0);
   // Forma de pagamento aplica desconto sobre o BRUTO → líquido é o que entra no bolso
   const valorLiquido = valorBruto * (1 - taxa);
   // Lucro real = o que entrou - o que custou
@@ -1451,7 +1468,7 @@ function NovaVenda({ produtos, onConfirm }) {
     }
   }, [pagamento]);
 
-  const totais = useMemo(() => calcularVenda(carrinho, pagamento), [carrinho, pagamento]);
+  const totais = useMemo(() => calcularVenda(carrinho, pagamento, parcelas), [carrinho, pagamento, parcelas]);
 
   const podeConfirmar = carrinho.length > 0 && !salvando;
 
@@ -1512,7 +1529,11 @@ function NovaVenda({ produtos, onConfirm }) {
                       marginLeft: 8, fontSize: 11, color: 'var(--ink-3)',
                       fontVariantNumeric: 'tabular-nums'
                     }}>
-                      {TAXAS[k].taxa === 0 ? '0%' : (TAXAS[k].taxa * 100).toFixed(1).replace('.', ',') + '%'}
+                      {TAXAS[k].taxa === 0
+                        ? '0%'
+                        : k === 'credito_parcelado'
+                          ? (TAXA_PARCELADO[parcelas] * 100).toFixed(2).replace('.', ',') + '%'
+                          : (TAXAS[k].taxa * 100).toFixed(1).replace('.', ',') + '%'}
                     </span>
                   </button>
                 ))}
