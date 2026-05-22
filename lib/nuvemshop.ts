@@ -118,7 +118,13 @@ export async function listOrders(
     per_page: String(params.per_page ?? 200),
     ...(params.status ? { payment_status: params.status } : {}),
   });
-  return apiRequest<NuvemshopOrder[]>(creds, `/orders?${qs}`);
+  try {
+    return await apiRequest<NuvemshopOrder[]>(creds, `/orders?${qs}`);
+  } catch (e) {
+    // Nuvemshop returns 404 when page exceeds last page — treat as empty
+    if (e instanceof Error && e.message.includes('404')) return [];
+    throw e;
+  }
 }
 
 // ---------- Clientes ----------
