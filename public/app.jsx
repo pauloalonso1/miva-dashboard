@@ -1403,14 +1403,16 @@ function NovaVenda({ produtos, onConfirm }) {
     return (p?.estoque || 0) - noCarrinho;
   };
 
-  // resultados de busca
+  // resultados de busca — disponíveis primeiro, esgotados no final
   const resultados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return produtos;
-    return produtos.filter(p =>
-      p.nome.toLowerCase().includes(q) ||
-      p.referencia.toLowerCase().includes(q)
-    );
+    const lista = q
+      ? produtos.filter(p =>
+          p.nome.toLowerCase().includes(q) ||
+          p.referencia.toLowerCase().includes(q)
+        )
+      : produtos;
+    return [...lista].sort((a, b) => (b.estoque > 0 ? 1 : 0) - (a.estoque > 0 ? 1 : 0));
   }, [busca, produtos]);
 
   const adicionar = (p) => {
