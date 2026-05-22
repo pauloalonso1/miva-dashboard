@@ -779,10 +779,6 @@ const API = {
     if (!r.ok) throw new Error('Erro ao carregar clientes');
     return r.json();
   },
-  async seed() {
-    const r = await fetch('/api/seed', { method: 'POST' });
-    return r.json();
-  },
 };
 
 /* ============================================================
@@ -842,100 +838,10 @@ function estornarEstoque(produtos, itens) {
   );
 }
 
-/* ============================================================
-   4. SEED — dados de exemplo (loja já preenchida)
-   ============================================================ */
 const novoId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
-const SEED_PRODUTOS = [
-  { id: 'p_arg01', nome: 'Argola Texturizada Pequena', referencia: 'AR-001', tipoBanho: 'Ouro 18k',  custo: 18.00, preco: 65.00,  estoque: 14, fornecedor: 'Atelier Belle' },
-  { id: 'p_col02', nome: 'Colar Ponto de Luz',          referencia: 'CL-014', tipoBanho: 'Ouro 18k',  custo: 32.00, preco: 119.00, estoque: 9,  fornecedor: 'Atelier Belle' },
-  { id: 'p_ane03', nome: 'Anel Solitário Cravejado',    referencia: 'AN-022', tipoBanho: 'Ouro 18k',  custo: 28.00, preco: 95.00,  estoque: 17, fornecedor: 'Casa Aurora' },
-  { id: 'p_pul04', nome: 'Pulseira Veneziana',          referencia: 'PL-009', tipoBanho: 'Ouro 18k',  custo: 24.00, preco: 89.00,  estoque: 4,  fornecedor: 'Casa Aurora' },
-  { id: 'p_tor05', nome: 'Tornozeleira Lasinha',        referencia: 'TZ-003', tipoBanho: 'Ródio',     custo: 14.00, preco: 49.00,  estoque: 22, fornecedor: 'Linha Prata' },
-  { id: 'p_bri06', nome: 'Brinco Gota Cristal',          referencia: 'BR-031', tipoBanho: 'Ouro 18k',  custo: 22.00, preco: 79.00,  estoque: 11, fornecedor: 'Atelier Belle' },
-  { id: 'p_col07', nome: 'Choker Elos Quadrados',        referencia: 'CL-040', tipoBanho: 'Ouro 18k',  custo: 38.00, preco: 139.00, estoque: 6,  fornecedor: 'Casa Aurora' },
-  { id: 'p_ane08', nome: 'Aliança Trabalhada Larga',     referencia: 'AN-055', tipoBanho: 'Ouro 18k',  custo: 31.00, preco: 109.00, estoque: 8,  fornecedor: 'Atelier Belle' },
-];
-
-// Gera vendas de exemplo espalhadas pelo mês atual
-function gerarVendasSeed(produtos) {
-  const hoje = new Date();
-  const ano = hoje.getFullYear();
-  const mes = hoje.getMonth();
-  const diasAtras = (n) => {
-    const d = new Date(ano, mes, Math.max(1, hoje.getDate() - n), 10 + (n % 8), 15 + (n % 30));
-    return d.toISOString();
-  };
-  const find = (ref) => produtos.find(p => p.referencia === ref);
-  const itemDe = (p, qtd) => ({
-    produtoId: p.id, nome: p.nome,
-    quantidade: qtd,
-    precoUnitario: p.preco,
-    custoUnitario: p.custo,
-  });
-
-  const vendas = [
-    { canal: 'cidade', pagamento: 'pix',               parcelas: 1, cliente: 'Marina S.',  daysAgo: 0, itens: [['AR-001', 1], ['BR-031', 1]] },
-    { canal: 'online', pagamento: 'credito_parcelado', parcelas: 3, cliente: 'Beatriz L.', daysAgo: 1, itens: [['CL-014', 1], ['AN-022', 1]] },
-    { canal: 'cidade', pagamento: 'debito',            parcelas: 1, cliente: 'Camila R.',  daysAgo: 2, itens: [['TZ-003', 1]] },
-    { canal: 'online', pagamento: 'pix',               parcelas: 1, cliente: 'Ana P.',     daysAgo: 3, itens: [['CL-040', 1]] },
-    { canal: 'cidade', pagamento: 'credito_vista',     parcelas: 1, cliente: 'Marina S.',  daysAgo: 5, itens: [['AN-055', 1], ['AR-001', 1]] },
-    { canal: 'online', pagamento: 'credito_parcelado', parcelas: 2, cliente: 'Júlia M.',   daysAgo: 7, itens: [['PL-009', 1], ['BR-031', 2]] },
-    { canal: 'cidade', pagamento: 'dinheiro',          parcelas: 1, cliente: null,         daysAgo: 9, itens: [['TZ-003', 2]] },
-    { canal: 'online', pagamento: 'pix',               parcelas: 1, cliente: 'Beatriz L.', daysAgo: 12, itens: [['CL-014', 1]] },
-    { canal: 'cidade', pagamento: 'debito',            parcelas: 1, cliente: 'Camila R.',  daysAgo: 14, itens: [['AN-022', 2]] },
-    { canal: 'online', pagamento: 'credito_vista',     parcelas: 1, cliente: 'Sofia A.',   daysAgo: 18, itens: [['AR-001', 1], ['CL-014', 1]] },
-  ];
-
-  return vendas.map((v, idx) => {
-    const itens = v.itens.map(([ref, qtd]) => itemDe(find(ref), qtd));
-    const { valorBruto, custoTotal, taxa, valorLiquido, lucro } = calcularVenda(itens, v.pagamento);
-    return {
-      id: 'v_' + idx + '_' + novoId(),
-      data: diasAtras(v.daysAgo),
-      canal: v.canal,
-      pagamento: v.pagamento,
-      parcelas: v.parcelas,
-      valorBruto, custoTotal, taxa, valorLiquido, lucro,
-      clienteNome: v.cliente,
-      itens,
-    };
-  });
-}
-
-function gerarClientesSeed(vendas) {
-  const map = new Map();
-  vendas.forEach(v => {
-    if (!v.clienteNome) return;
-    const existente = map.get(v.clienteNome) || {
-      id: 'c_' + novoId(),
-      nome: v.clienteNome,
-      telefone: '',
-      cidade: '',
-      totalGasto: 0,
-      compras: 0,
-    };
-    existente.totalGasto += v.valorBruto;
-    existente.compras += 1;
-    map.set(v.clienteNome, existente);
-  });
-  return Array.from(map.values());
-}
-
-// O seed final aplica a baixa de estoque sobre o catálogo seed.
-function buildSeed() {
-  const produtosBase = SEED_PRODUTOS.map(p => ({ ...p }));
-  const vendas = gerarVendasSeed(produtosBase);
-  // baixar estoque pelo total de cada venda
-  let produtos = produtosBase;
-  vendas.forEach(v => { produtos = baixarEstoque(produtos, v.itens); });
-  const clientes = gerarClientesSeed(vendas);
-  return { produtos, vendas, clientes };
-}
-
 /* ============================================================
-   5. FORMATADORES & helpers
+   4. FORMATADORES & helpers
    ============================================================ */
 const brl = (n) => (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const num = (n) => (n ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -1013,20 +919,7 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [p, v, c] = await Promise.all([
-          API.getProdutos(),
-          API.getVendas(),
-          API.getClientes(),
-        ]);
-        if (p.length === 0) {
-          // Primeiro uso: popula dados de demonstração
-          await API.seed();
-          await recarregarDados();
-        } else {
-          setProdutos(p);
-          setVendas(v);
-          setClientes(c);
-        }
+        await recarregarDados();
       } catch (e) {
         console.error('Erro ao carregar dados:', e);
       }
@@ -1395,11 +1288,11 @@ function NovaVenda({ produtos, onConfirm }) {
   // resultados de busca
   const resultados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return produtos.slice(0, 6);
+    if (!q) return produtos;
     return produtos.filter(p =>
       p.nome.toLowerCase().includes(q) ||
       p.referencia.toLowerCase().includes(q)
-    ).slice(0, 8);
+    );
   }, [busca, produtos]);
 
   const adicionar = (p) => {
