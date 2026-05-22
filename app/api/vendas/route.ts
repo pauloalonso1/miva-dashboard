@@ -32,65 +32,62 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const id = body.id ?? 'v_' + nanoid();
 
-    await db.transaction(async (tx) => {
-      // 1. Insere venda
-      await tx.insert(vendas).values({
-        id,
-        data:         body.data ? new Date(body.data) : new Date(),
-        canal:        body.canal,
-        pagamento:    body.pagamento,
-        parcelas:     body.parcelas ?? 1,
-        valorBruto:   String(body.valorBruto),
-        custoTotal:   String(body.custoTotal),
-        taxa:         String(body.taxa),
-        valorLiquido: String(body.valorLiquido),
-        lucro:        String(body.lucro),
-        clienteNome:  body.clienteNome ?? null,
-        nuvemshopOrderId: body.nuvemshopOrderId ?? null,
+    // 1. Insere venda
+    await db.insert(vendas).values({
+      id,
+      data:         body.data ? new Date(body.data) : new Date(),
+      canal:        body.canal,
+      pagamento:    body.pagamento,
+      parcelas:     body.parcelas ?? 1,
+      valorBruto:   String(body.valorBruto),
+      custoTotal:   String(body.custoTotal),
+      taxa:         String(body.taxa),
+      valorLiquido: String(body.valorLiquido),
+      lucro:        String(body.lucro),
+      clienteNome:  body.clienteNome ?? null,
+      nuvemshopOrderId: body.nuvemshopOrderId ?? null,
+    });
+
+    // 2. Insere itens e baixa estoque
+    for (const item of body.itens as ItemInput[]) {
+      await db.insert(itensVenda).values({
+        vendaId:       id,
+        produtoId:     item.produtoId,
+        nome:          item.nome,
+        quantidade:    item.quantidade,
+        precoUnitario: String(item.precoUnitario),
+        custoUnitario: String(item.custoUnitario),
       });
 
-      // 2. Insere itens e baixa estoque
-      for (const item of body.itens as ItemInput[]) {
-        await tx.insert(itensVenda).values({
-          vendaId:       id,
-          produtoId:     item.produtoId,
-          nome:          item.nome,
-          quantidade:    item.quantidade,
-          precoUnitario: String(item.precoUnitario),
-          custoUnitario: String(item.custoUnitario),
+      const [prod] = await db.select({ estoque: produtos.estoque })
+        .from(produtos).where(eq(produtos.id, item.produtoId));
+      if (prod) {
+        await db.update(produtos)
+          .set({ estoque: Math.max(0, prod.estoque - item.quantidade), updatedAt: new Date() })
+          .where(eq(produtos.id, item.produtoId));
+      }
+    }
+
+    // 3. Upsert cliente
+    if (body.clienteNome) {
+      const [existing] = await db.select().from(clientes).where(eq(clientes.nome, body.clienteNome));
+      if (existing) {
+        await db.update(clientes).set({
+          totalGasto: String(Number(existing.totalGasto) + Number(body.valorBruto)),
+          compras:    existing.compras + 1,
+          updatedAt:  new Date(),
+        }).where(eq(clientes.nome, body.clienteNome));
+      } else {
+        await db.insert(clientes).values({
+          id:         'c_' + nanoid(),
+          nome:       body.clienteNome,
+          telefone:   '',
+          cidade:     '',
+          totalGasto: String(body.valorBruto),
+          compras:    1,
         });
-
-        // Baixar estoque
-        const [prod] = await tx.select({ estoque: produtos.estoque })
-          .from(produtos).where(eq(produtos.id, item.produtoId));
-        if (prod) {
-          await tx.update(produtos)
-            .set({ estoque: Math.max(0, prod.estoque - item.quantidade), updatedAt: new Date() })
-            .where(eq(produtos.id, item.produtoId));
-        }
       }
-
-      // 3. Upsert cliente
-      if (body.clienteNome) {
-        const [existing] = await tx.select().from(clientes).where(eq(clientes.nome, body.clienteNome));
-        if (existing) {
-          await tx.update(clientes).set({
-            totalGasto: String(Number(existing.totalGasto) + Number(body.valorBruto)),
-            compras:    existing.compras + 1,
-            updatedAt:  new Date(),
-          }).where(eq(clientes.nome, body.clienteNome));
-        } else {
-          await tx.insert(clientes).values({
-            id:         'c_' + nanoid(),
-            nome:       body.clienteNome,
-            telefone:   '',
-            cidade:     '',
-            totalGasto: String(body.valorBruto),
-            compras:    1,
-          });
-        }
-      }
-    });
+    }
 
     const [createdVenda] = await db.select().from(vendas).where(eq(vendas.id, id));
     const createdItens   = await db.select().from(itensVenda).where(eq(itensVenda.vendaId, id));
