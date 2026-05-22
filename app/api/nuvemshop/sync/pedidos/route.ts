@@ -116,52 +116,50 @@ export async function POST(req: NextRequest) {
         const clienteNome = order.customer?.name?.trim() || null;
 
         try {
-          await db.transaction(async (tx) => {
-            await tx.insert(vendas).values({
-              id:               vendaId,
-              data:             new Date(order.created_at),
-              canal:            'online',
-              pagamento:        order.gateway ?? 'online',
-              parcelas:         1,
-              valorBruto:       String(valorBruto),
-              custoTotal:       String(custoTotal),
-              taxa:             String(taxa),
-              valorLiquido:     String(valorLiquido),
-              lucro:            String(lucro),
-              clienteNome,
-              nuvemshopOrderId: nsOrderId,
-            });
-
-            if (itens.length > 0) {
-              await tx.insert(itensVenda).values(
-                itens.map(item => ({
-                  vendaId,
-                  produtoId:     item.produtoId,
-                  nome:          item.nome,
-                  quantidade:    item.quantidade,
-                  precoUnitario: String(item.precoUnitario),
-                  custoUnitario: String(item.custoUnitario),
-                }))
-              );
-            }
-
-            if (clienteNome) {
-              const [existing] = await tx.select({ id: clientes.id, totalGasto: clientes.totalGasto, compras: clientes.compras })
-                .from(clientes).where(eq(clientes.nome, clienteNome));
-              if (existing) {
-                await tx.update(clientes).set({
-                  totalGasto: String(Number(existing.totalGasto) + valorBruto),
-                  compras:    existing.compras + 1,
-                  updatedAt:  new Date(),
-                }).where(eq(clientes.id, existing.id));
-              } else {
-                await tx.insert(clientes).values({
-                  id: 'c_ns_' + nanoid(), nome: clienteNome,
-                  totalGasto: String(valorBruto), compras: 1,
-                });
-              }
-            }
+          await db.insert(vendas).values({
+            id:               vendaId,
+            data:             new Date(order.created_at),
+            canal:            'online',
+            pagamento:        order.gateway ?? 'online',
+            parcelas:         1,
+            valorBruto:       String(valorBruto),
+            custoTotal:       String(custoTotal),
+            taxa:             String(taxa),
+            valorLiquido:     String(valorLiquido),
+            lucro:            String(lucro),
+            clienteNome,
+            nuvemshopOrderId: nsOrderId,
           });
+
+          if (itens.length > 0) {
+            await db.insert(itensVenda).values(
+              itens.map(item => ({
+                vendaId,
+                produtoId:     item.produtoId,
+                nome:          item.nome,
+                quantidade:    item.quantidade,
+                precoUnitario: String(item.precoUnitario),
+                custoUnitario: String(item.custoUnitario),
+              }))
+            );
+          }
+
+          if (clienteNome) {
+            const [existing] = await db.select({ id: clientes.id, totalGasto: clientes.totalGasto, compras: clientes.compras })
+              .from(clientes).where(eq(clientes.nome, clienteNome));
+            if (existing) {
+              await db.update(clientes).set({
+                totalGasto: String(Number(existing.totalGasto) + valorBruto),
+                compras:    existing.compras + 1,
+                updatedAt:  new Date(),
+              }).where(eq(clientes.id, existing.id));
+            } else {
+              await db.insert(clientes).values({
+                id: 'c_ns_' + nanoid(), nome: clienteNome,
+                totalGasto: String(valorBruto), compras: 1,
+              });
+            }
+          }
           created++;
         } catch (txErr) {
           console.error('[sync/pedidos] falhou pedido', nsOrderId, txErr);
