@@ -2148,19 +2148,42 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
    13. TELA — CLIENTES
    ============================================================ */
 function Clientes({ clientes, vendas }) {
-  // calcula stats live a partir das vendas (mais confiável que o cache)
   const ranking = useMemo(() => {
-    const map = new Map();
+    // Enriquece os clientes do banco com dados de vendas locais (quando disponíveis)
+    const vendasMap = new Map();
     vendas.forEach(v => {
       if (!v.clienteNome) return;
-      const reg = map.get(v.clienteNome) || { nome: v.clienteNome, totalGasto: 0, compras: 0, ultima: v.data };
+      const reg = vendasMap.get(v.clienteNome) || { totalGasto: 0, compras: 0, ultima: v.data };
       reg.totalGasto += v.valorBruto;
       reg.compras += 1;
       if (new Date(v.data) > new Date(reg.ultima)) reg.ultima = v.data;
-      map.set(v.clienteNome, reg);
+      vendasMap.set(v.clienteNome, reg);
     });
-    return Array.from(map.values()).sort((a, b) => b.totalGasto - a.totalGasto);
-  }, [vendas]);
+
+    // Clientes do banco como base; enriquece com vendas locais se disponível
+    const fromDB = clientes.map(c => {
+      const vStats = vendasMap.get(c.nome);
+      return {
+        nome:       c.nome,
+        telefone:   c.telefone,
+        cidade:     c.cidade,
+        totalGasto: vStats ? vStats.totalGasto : c.totalGasto,
+        compras:    vStats ? vStats.compras    : c.compras,
+        ultima:     vStats ? vStats.ultima     : null,
+      };
+    });
+
+    // Adiciona clientes que aparecem só em vendas (sem cadastro no banco)
+    vendas.forEach(v => {
+      if (!v.clienteNome) return;
+      if (!fromDB.find(c => c.nome === v.clienteNome)) {
+        const s = vendasMap.get(v.clienteNome);
+        fromDB.push({ nome: v.clienteNome, telefone: '', cidade: '', totalGasto: s.totalGasto, compras: s.compras, ultima: s.ultima });
+      }
+    });
+
+    return fromDB.sort((a, b) => b.totalGasto - a.totalGasto);
+  }, [clientes, vendas]);
 
   const top = ranking[0];
   const totalGasto = ranking.reduce((s, c) => s + c.totalGasto, 0);
@@ -2183,7 +2206,7 @@ function Clientes({ clientes, vendas }) {
                 <div>
                   <div className="section-sub" style={{marginBottom: 4}}>Cliente que mais compra</div>
                   <div style={{fontFamily: 'var(--serif)', fontSize: 32, fontWeight: 500, color: 'var(--ink)'}}>{top.nome}</div>
-                  <div style={{fontSize: 13, color: 'var(--ink-2)', marginTop: 4}}>{top.compras} {top.compras === 1 ? 'compra' : 'compras'} · última em {formatData(top.ultima)}</div>
+                  <div style={{fontSize: 13, color: 'var(--ink-2)', marginTop: 4}}>{top.compras} {top.compras === 1 ? 'compra' : 'compras'}{top.ultima ? ' · última em ' + formatData(top.ultima) : ''}</div>
                 </div>
                 <div style={{textAlign: 'right'}}>
                   <div className="section-sub" style={{marginBottom: 4}}>Total gasto</div>
@@ -2207,11 +2230,18 @@ function Clientes({ clientes, vendas }) {
               <tbody>
                 {ranking.map(c => (
                   <tr key={c.nome}>
-                    <td><strong style={{fontWeight: 500}}>{c.nome}</strong></td>
+                    <td>
+                      <strong style={{fontWeight: 500}}>{c.nome}</strong>
+                      {(c.telefone || c.cidade) && (
+                        <div style={{fontSize:11, color:'var(--ink-3)', marginTop:2}}>
+                          {[c.telefone, c.cidade].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
+                    </td>
                     <td className="num">{c.compras}</td>
-                    <td>{formatData(c.ultima)}</td>
+                    <td>{c.ultima ? formatData(c.ultima) : <span style={{color:'var(--ink-3)'}}>—</span>}</td>
                     <td className="num" style={{fontFamily: 'var(--serif)', fontSize: 16}}>{brl(c.totalGasto)}</td>
-                    <td className="num">{brl(c.totalGasto / c.compras)}</td>
+                    <td className="num">{c.compras > 0 ? brl(c.totalGasto / c.compras) : <span style={{color:'var(--ink-3)'}}>—</span>}</td>
                   </tr>
                 ))}
               </tbody>
