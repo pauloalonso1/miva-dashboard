@@ -653,6 +653,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
   transition: transform .3s ease;
 }
 .produto-card:hover .produto-img-wrap img { transform: scale(1.04); }
+.produto-card.out-stock .produto-img-wrap img { filter: grayscale(100%); opacity: .6; }
 .produto-img-placeholder {
   width: 100%; height: 100%;
   display: flex; align-items: center; justify-content: center;
