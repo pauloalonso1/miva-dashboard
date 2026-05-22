@@ -285,15 +285,16 @@ input, select, textarea { font-family: inherit; color: inherit; }
   margin-bottom: 8px;
 }
 .kpi-value {
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-size: 30px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
   line-height: 1.1;
-  letter-spacing: 0.005em;
+  letter-spacing: -0.01em;
 }
 .kpi-value .cents {
   font-size: 18px;
+  font-weight: 500;
   color: var(--ink-2);
 }
 .kpi-note {
@@ -362,7 +363,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
 .list-item-main { display: flex; flex-direction: column; gap: 2px; }
 .list-item-name { color: var(--ink); font-size: 13px; }
 .list-item-meta { color: var(--ink-3); font-size: 11px; }
-.list-item-value { font-family: var(--serif); font-size: 18px; color: var(--ink); }
+.list-item-value { font-family: var(--sans); font-size: 17px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
 
 /* ---- Botões ---- */
 .btn {
@@ -688,7 +689,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
   border-top: 1px solid var(--line);
 }
 .produto-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-3); }
-.produto-stat-val { font-family: var(--serif); font-size: 17px; color: var(--ink); }
+.produto-stat-val { font-family: var(--sans); font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
 .stock-controls { display: flex; align-items: center; gap: 10px; }
 
 /* ---- Filtros ---- */
@@ -1890,7 +1891,7 @@ function Historico({ vendas, onExcluir, onSyncPedidos }) {
                     <td className="num">{totalItens}</td>
                     <td className="num">{brl(v.valorBruto)}</td>
                     <td className="num">{brl(v.valorLiquido)}</td>
-                    <td className="num" style={{fontFamily: 'var(--serif)', fontSize: 19, fontWeight: 500, color: v.lucro >= 0 ? 'var(--emerald)' : 'var(--danger)'}}>
+                    <td className="num" style={{fontFamily: 'var(--sans)', fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em', color: v.lucro >= 0 ? 'var(--emerald)' : 'var(--danger)'}}>
                       {brl(v.lucro)}
                     </td>
                     <td>
@@ -2282,7 +2283,7 @@ function Clientes({ clientes, vendas }) {
                 </div>
                 <div style={{textAlign: 'right'}}>
                   <div className="section-sub" style={{marginBottom: 4}}>Total gasto</div>
-                  <div style={{fontFamily: 'var(--serif)', fontSize: 30, fontWeight: 500, color: 'var(--gold-2)'}}>{brl(top.totalGasto)}</div>
+                  <div style={{fontFamily: 'var(--sans)', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--gold-2)'}}>{brl(top.totalGasto)}</div>
                 </div>
               </div>
             </div>
@@ -2312,7 +2313,7 @@ function Clientes({ clientes, vendas }) {
                     </td>
                     <td className="num">{c.compras}</td>
                     <td>{c.ultima ? formatData(c.ultima) : <span style={{color:'var(--ink-3)'}}>—</span>}</td>
-                    <td className="num" style={{fontFamily: 'var(--serif)', fontSize: 16}}>{brl(c.totalGasto)}</td>
+                    <td className="num" style={{fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em'}}>{brl(c.totalGasto)}</td>
                     <td className="num">{c.compras > 0 ? brl(c.totalGasto / c.compras) : <span style={{color:'var(--ink-3)'}}>—</span>}</td>
                   </tr>
                 ))}
