@@ -1114,6 +1114,28 @@ function App() {
           <strong>{mesAtualLabel()}</strong>
           <span>{vendas.filter(v => isMesAtual(v.data)).length} vendas no mês</span>
         </div>
+        <button
+          onClick={async () => {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.href = '/login';
+          }}
+          style={{
+            marginLeft: '16px',
+            padding: '6px 14px',
+            background: 'transparent',
+            border: '1px solid var(--gold)',
+            borderRadius: '6px',
+            color: 'var(--gold)',
+            fontSize: '11px',
+            fontFamily: 'var(--sans)',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Sair
+        </button>
       </header>
       <main className="main">
         {tela === 'painel'    && <Painel    vendas={vendas} produtos={produtos} setTela={setTela} />}
