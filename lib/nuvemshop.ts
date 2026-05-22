@@ -91,8 +91,9 @@ export interface NuvemshopOrder {
   id: number;
   number: number;
   status: string;
-  payment_status: string;
-  gateway: string;
+  payment_status: string | null;
+  financial_status?: string | null;
+  gateway: string | null;
   created_at: string;
   total: string;
   subtotal: string;

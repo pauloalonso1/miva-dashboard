@@ -47,13 +47,24 @@ export async function POST(req: NextRequest) {
     let created = 0;
     let skipped = 0;
 
-    for (let page = 1; page <= totalPages; page++) {
-      const orders = await listOrders(creds, { page, per_page: 200, status: 'paid' });
-      if (!orders.length) break;
+    // Busca pedidos com qualquer status de pagamento válido:
+    // 'paid' = capturado, 'authorized' = aprovado aguardando captura (MercadoPago BR)
+    // Pedidos pendentes/cancelados são filtrados abaixo
+    const VALID_PAYMENT_STATUSES = new Set(['paid', 'authorized', 'partially_paid']);
 
-      // Batch: collect all NS order IDs and product IDs from this page
-      const nsOrderIds   = orders.map(o => String(o.id));
-      const nsProductIds = [...new Set(orders.flatMap(o => o.products.map(p => String(p.product_id))))];
+    for (let page = 1; page <= totalPages; page++) {
+      const orders = await listOrders(creds, { page, per_page: 200 });
+      if (!orders.length) break;
+      // Filtra localmente para não depender de qual status a Nuvemshop usa
+      const pagos = orders.filter(o =>
+        VALID_PAYMENT_STATUSES.has((o.payment_status ?? '').toLowerCase()) ||
+        VALID_PAYMENT_STATUSES.has((o as any).financial_status?.toLowerCase() ?? '')
+      );
+      if (!pagos.length) continue;
+
+      // Batch: collect all NS order IDs and product IDs from valid orders
+      const nsOrderIds   = pagos.map(o => String(o.id));
+      const nsProductIds = [...new Set(pagos.flatMap(o => o.products.map(p => String(p.product_id))))];
 
       // Single query to find already-imported orders
       const existingOrders = await db
@@ -72,7 +83,7 @@ export async function POST(req: NextRequest) {
         prods.forEach(p => { if (p.nuvemshopProductId) prodMap.set(p.nuvemshopProductId, { id: p.id, custo: p.custo ?? '0' }); });
       }
 
-      for (const order of orders) {
+      for (const order of pagos) {
         const nsOrderId = String(order.id);
         if (importedSet.has(nsOrderId)) { skipped++; continue; }
 
