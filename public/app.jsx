@@ -803,6 +803,15 @@ const API = {
     if (!r.ok) throw new Error('Erro ao carregar clientes');
     return r.json();
   },
+  async syncPedidos(paginas = 3) {
+    const r = await fetch('/api/nuvemshop/sync/pedidos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paginas }),
+    });
+    if (!r.ok) throw new Error('Erro ao sincronizar pedidos');
+    return r.json();
+  },
 };
 
 /* ============================================================
@@ -908,6 +917,7 @@ const Icon = ({ name, size = 18, ...rest }) => {
     close:     <><path d="M6 6l12 12M6 18L18 6"/></>,
     alert:     <><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.5 17.5c-.6 1 .1 2.5 1.3 2.5h16.4c1.2 0 1.9-1.4 1.3-2.5L13.7 3.9c-.6-1.1-2.2-1.1-2.8 0z"/></>,
     sparkle:   <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></>,
+    edit:      <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -927,6 +937,13 @@ function App() {
   const [clientes, setClientes] = useState([]);
   const [pronto, setPronto]     = useState(false);
   const [toast, setToast]       = useState(null);
+  const [metaMensal, setMetaMensalState] = useState(() => {
+    try { return Number(localStorage.getItem('miva_meta_mensal')) || 0; } catch { return 0; }
+  });
+  const setMetaMensal = (v) => {
+    setMetaMensalState(v);
+    try { localStorage.setItem('miva_meta_mensal', String(v)); } catch {}
+  };
 
   // -------- carregar dados da API ---------
   const recarregarDados = useCallback(async () => {
@@ -1008,6 +1025,27 @@ function App() {
     }
   }, [recarregarDados, showToast]);
 
+  const editarProduto = useCallback(async (id, dados) => {
+    try {
+      await API.updateProduto(id, dados);
+      await recarregarDados();
+      showToast('Peça atualizada');
+    } catch (e) {
+      showToast(e.message || 'Erro ao atualizar produto', 'error');
+    }
+  }, [recarregarDados, showToast]);
+
+  const sincronizarPedidos = useCallback(async () => {
+    try {
+      showToast('Sincronizando pedidos…');
+      const res = await API.syncPedidos(3);
+      await recarregarDados();
+      showToast(`Sync concluído — ${res.summary?.created ?? 0} novos pedidos`);
+    } catch (e) {
+      showToast(e.message || 'Erro ao sincronizar', 'error');
+    }
+  }, [recarregarDados, showToast]);
+
   // -------- render ---------
   if (!pronto) {
     return (
@@ -1055,10 +1093,10 @@ function App() {
         </button>
       </header>
       <main className="main">
-        {tela === 'painel'    && <Painel    vendas={vendas} produtos={produtos} setTela={setTela} />}
+        {tela === 'painel'    && <Painel    vendas={vendas} produtos={produtos} setTela={setTela} metaMensal={metaMensal} onSetMeta={setMetaMensal} onSyncPedidos={sincronizarPedidos} />}
         {tela === 'venda'     && <NovaVenda produtos={produtos} onConfirm={async v => { await registrarVenda(v); setTela('historico'); }} />}
-        {tela === 'historico' && <Historico vendas={vendas} onExcluir={excluirVenda} />}
-        {tela === 'produtos'  && <Produtos  produtos={produtos} onCadastrar={adicionarProduto} onAjustar={ajustarEstoque} onExcluir={excluirProduto} />}
+        {tela === 'historico' && <Historico vendas={vendas} onExcluir={excluirVenda} onSyncPedidos={sincronizarPedidos} />}
+        {tela === 'produtos'  && <Produtos  produtos={produtos} onCadastrar={adicionarProduto} onAjustar={ajustarEstoque} onExcluir={excluirProduto} onEditar={editarProduto} />}
         {tela === 'clientes'  && <Clientes  clientes={clientes} vendas={vendas} />}
       </main>
       {toast && <div className={'toast ' + toast.kind}>{toast.message}</div>}
@@ -1097,7 +1135,7 @@ function Sidebar({ tela, setTela }) {
 /* ============================================================
    9. TELA — PAINEL
    ============================================================ */
-function Painel({ vendas, produtos, setTela }) {
+function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedidos }) {
   const dados = useMemo(() => {
     const doMes = vendas.filter(v => isMesAtual(v.data));
     const bruto    = doMes.reduce((s, v) => s + v.valorBruto, 0);
@@ -1234,6 +1272,61 @@ function Painel({ vendas, produtos, setTela }) {
               </div>
             </div>
           )}
+        </section>
+      </div>
+
+      {/* Meta mensal + Sync pedidos */}
+      <div className="two-col" style={{marginTop: 0}}>
+        <section className="card">
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
+            <div>
+              <h2 className="section-title">Meta do mês</h2>
+              <p className="section-sub">Faturamento bruto alvo</p>
+            </div>
+            <div style={{display:'flex', alignItems:'center', gap:6}}>
+              <span style={{fontSize:11, color:'var(--ink-3)'}}>R$</span>
+              <input
+                type="number"
+                className="input"
+                style={{width:110, textAlign:'right', padding:'6px 10px'}}
+                placeholder="0"
+                value={metaMensal || ''}
+                onChange={e => onSetMeta(Number(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+          {metaMensal > 0 ? (
+            <div style={{marginTop:14}}>
+              <div style={{display:'flex', justifyContent:'space-between', fontSize:12, color:'var(--ink-2)', marginBottom:6}}>
+                <span>{brl(dados.bruto)}</span>
+                <span style={{color: dados.bruto >= metaMensal ? 'var(--emerald)' : 'var(--ink-2)'}}>
+                  {Math.round(dados.bruto / metaMensal * 100)}% da meta {brl(metaMensal)}
+                </span>
+              </div>
+              <div style={{height:8, background:'var(--line)', borderRadius:99, overflow:'hidden'}}>
+                <div style={{
+                  height:'100%',
+                  width: Math.min(100, dados.bruto / metaMensal * 100) + '%',
+                  background: dados.bruto >= metaMensal ? 'var(--emerald)' : 'var(--gold)',
+                  borderRadius:99, transition:'width .6s ease',
+                }}/>
+              </div>
+              {dados.bruto >= metaMensal && (
+                <div style={{marginTop:8, fontSize:12, color:'var(--emerald)', fontWeight:500}}>Meta atingida!</div>
+              )}
+            </div>
+          ) : (
+            <p style={{fontSize:12, color:'var(--ink-3)', marginTop:8}}>Digite um valor alvo acima.</p>
+          )}
+        </section>
+
+        <section className="card">
+          <h2 className="section-title">Sincronizar Nuvemshop</h2>
+          <p className="section-sub">Importa os pedidos pagos mais recentes</p>
+          <button className="btn btn-primary" style={{marginTop:12, width:'100%'}} onClick={onSyncPedidos}>
+            Sincronizar pedidos agora
+          </button>
+          <p style={{fontSize:11, color:'var(--ink-3)', marginTop:8}}>Importa até 600 pedidos pagos da Nuvemshop para o histórico.</p>
         </section>
       </div>
     </div>
@@ -1468,10 +1561,21 @@ function NovaVenda({ produtos, onConfirm }) {
                       className={'search-result-item' + (esgotado ? ' disabled' : '')}
                       onClick={() => !esgotado && adicionar(p)}
                     >
-                      <div>
-                        <div style={{fontSize: 14, color: 'var(--ink)'}}>{p.nome}</div>
-                        <div style={{fontSize: 11, color: 'var(--ink-3)', marginTop: 2}}>
-                          {p.referencia} · {p.tipoBanho} · {brl(p.preco)}
+                      <div style={{display:'flex', alignItems:'center', gap:10}}>
+                        <div style={{
+                          width:40, height:40, borderRadius:6, overflow:'hidden', flexShrink:0,
+                          background:'var(--surface-2)', border:'1px solid var(--line)',
+                        }}>
+                          {p.imagemUrl
+                            ? <img src={p.imagemUrl} alt={p.nome} style={{width:'100%',height:'100%',objectFit:'cover'}} loading="lazy" />
+                            : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>💎</div>
+                          }
+                        </div>
+                        <div>
+                          <div style={{fontSize: 14, color: 'var(--ink)'}}>{p.nome}</div>
+                          <div style={{fontSize: 11, color: 'var(--ink-3)', marginTop: 2}}>
+                            {p.referencia}{p.tipoBanho ? ' · ' + p.tipoBanho : ''} · {brl(p.preco)}
+                          </div>
                         </div>
                       </div>
                       <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
@@ -1586,11 +1690,40 @@ function NovaVenda({ produtos, onConfirm }) {
 /* ============================================================
    11. TELA — HISTÓRICO
    ============================================================ */
-function Historico({ vendas, onExcluir }) {
+function Historico({ vendas, onExcluir, onSyncPedidos }) {
   const [filtroCanal,     setFiltroCanal]     = useState('todos');
   const [filtroPagamento, setFiltroPagamento] = useState('todos');
   const [filtroPeriodo,   setFiltroPeriodo]   = useState('mes');
   const [confirmarExcluir, setConfirmarExcluir] = useState(null);
+  const [sincronizando, setSincronizando]     = useState(false);
+
+  const handleSync = async () => {
+    setSincronizando(true);
+    await onSyncPedidos();
+    setSincronizando(false);
+  };
+
+  const exportarCSV = () => {
+    const header = ['Data','Hora','Canal','Pagamento','Parcelas','Cliente','Bruto','Liquido','Custo','Lucro'];
+    const linhas = filtradas.map(v => [
+      formatData(v.data),
+      new Date(v.data).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}),
+      v.canal,
+      TAXAS[v.pagamento]?.label ?? v.pagamento,
+      v.parcelas,
+      v.clienteNome ?? '',
+      v.valorBruto.toFixed(2).replace('.',','),
+      v.valorLiquido.toFixed(2).replace('.',','),
+      v.custoTotal.toFixed(2).replace('.',','),
+      v.lucro.toFixed(2).replace('.',','),
+    ]);
+    const csv = [header, ...linhas].map(r => r.join(';')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'vendas-miva.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const filtradas = useMemo(() => {
     return vendas.filter(v => {
@@ -1642,6 +1775,15 @@ function Historico({ vendas, onExcluir }) {
           <option value="todos">Todos</option>
           {ORDEM_PAGAMENTOS.map(k => <option key={k} value={k}>{TAXAS[k].label}</option>)}
         </select>
+
+        <div style={{marginLeft:'auto', display:'flex', gap:8}}>
+          <button className="btn btn-small" onClick={exportarCSV} disabled={filtradas.length === 0}>
+            Exportar CSV
+          </button>
+          <button className="btn btn-small btn-primary" onClick={handleSync} disabled={sincronizando}>
+            {sincronizando ? 'Sincronizando…' : 'Sync Nuvemshop'}
+          </button>
+        </div>
       </div>
 
       {filtradas.length === 0 ? (
@@ -1723,13 +1865,51 @@ function Historico({ vendas, onExcluir }) {
 /* ============================================================
    12. TELA — PRODUTOS & ESTOQUE
    ============================================================ */
-function Produtos({ produtos, onCadastrar, onAjustar, onExcluir }) {
+function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
   const [form, setForm] = useState({
     nome: '', referencia: '', tipoBanho: 'Ouro 18k',
     custo: '', preco: '', estoque: '', fornecedor: '',
   });
   const [erro, setErro] = useState('');
   const [confirmDel, setConfirmDel] = useState(null);
+  const [busca, setBusca] = useState('');
+  const [editando, setEditando] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [erroEdit, setErroEdit] = useState('');
+
+  const abrirEditar = (p) => {
+    setEditando(p);
+    setEditForm({ nome: p.nome, referencia: p.referencia, tipoBanho: p.tipoBanho, custo: p.custo, preco: p.preco, fornecedor: p.fornecedor });
+    setErroEdit('');
+  };
+
+  const salvarEdicao = async (e) => {
+    e.preventDefault();
+    setErroEdit('');
+    const custo = parseFloat((editForm.custo + '').replace(',', '.'));
+    const preco = parseFloat((editForm.preco + '').replace(',', '.'));
+    if (!editForm.nome.trim()) { setErroEdit('Nome é obrigatório.'); return; }
+    if (isNaN(custo) || isNaN(preco)) { setErroEdit('Custo e preço precisam ser números.'); return; }
+    if (preco < custo) { setErroEdit('Preço abaixo do custo.'); return; }
+    await onEditar(editando.id, {
+      nome: editForm.nome.trim(),
+      referencia: editForm.referencia.trim().toUpperCase(),
+      tipoBanho: editForm.tipoBanho,
+      custo, preco,
+      fornecedor: editForm.fornecedor?.trim() ?? '',
+    });
+    setEditando(null);
+  };
+
+  const produtosFiltrados = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return produtos;
+    return produtos.filter(p =>
+      p.nome.toLowerCase().includes(q) ||
+      p.referencia.toLowerCase().includes(q) ||
+      (p.tipoBanho && p.tipoBanho.toLowerCase().includes(q))
+    );
+  }, [produtos, busca]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -1754,6 +1934,48 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir }) {
     <div>
       <h1 className="screen-title">Produtos & estoque</h1>
       <p className="screen-sub">{produtos.length} peças no catálogo · {produtos.reduce((s, p) => s + p.estoque, 0)} unidades em estoque.</p>
+      {editando && (
+        <div className="modal-backdrop" onClick={() => setEditando(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:460}}>
+            <h3 className="modal-title">Editar peça</h3>
+            <form onSubmit={salvarEdicao} style={{marginTop:16}}>
+              {erroEdit && <div style={{background:'var(--danger-soft)',color:'var(--danger)',borderRadius:8,padding:'8px 12px',fontSize:12,marginBottom:12}}>{erroEdit}</div>}
+              <div className="field">
+                <label className="label">Nome</label>
+                <input className="input" value={editForm.nome} onChange={e => setEditForm({...editForm, nome: e.target.value})} />
+              </div>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+                <div className="field">
+                  <label className="label">Referência</label>
+                  <input className="input" value={editForm.referencia} onChange={e => setEditForm({...editForm, referencia: e.target.value})} />
+                </div>
+                <div className="field">
+                  <label className="label">Tipo de banho</label>
+                  <select className="select" value={editForm.tipoBanho} onChange={e => setEditForm({...editForm, tipoBanho: e.target.value})}>
+                    <option>Ouro 18k</option><option>Ouro 24k</option><option>Ródio</option><option>Rose Gold</option><option>Prata</option><option>Sem banho</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="label">Custo (R$)</label>
+                  <input className="input" type="number" step="0.01" value={editForm.custo} onChange={e => setEditForm({...editForm, custo: e.target.value})} />
+                </div>
+                <div className="field">
+                  <label className="label">Preço (R$)</label>
+                  <input className="input" type="number" step="0.01" value={editForm.preco} onChange={e => setEditForm({...editForm, preco: e.target.value})} />
+                </div>
+              </div>
+              <div className="field">
+                <label className="label">Fornecedor</label>
+                <input className="input" value={editForm.fornecedor} onChange={e => setEditForm({...editForm, fornecedor: e.target.value})} />
+              </div>
+              <div style={{display:'flex', gap:8, justifyContent:'flex-end', marginTop:16}}>
+                <button type="button" className="btn" onClick={() => setEditando(null)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary">Salvar alterações</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <div style={{display: 'grid', gridTemplateColumns: '320px 1fr', gap: 18}} className="prod-layout">
         <style>{`@media (max-width: 880px) { .prod-layout { grid-template-columns: 1fr !important; } }`}</style>
@@ -1813,11 +2035,23 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir }) {
 
         {/* CATÁLOGO */}
         <div>
-          {produtos.length === 0 ? (
-            <div className="card"><EstadoVazio titulo="Catálogo vazio" sub="Cadastre a primeira peça ao lado." /></div>
+          <div style={{marginBottom:14}}>
+            <div className="search-wrap">
+              <span className="search-icon"><Icon name="search" size={16}/></span>
+              <input
+                className="input"
+                placeholder="Filtrar por nome, referência ou banho…"
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+              />
+            </div>
+            {busca && <p style={{fontSize:11,color:'var(--ink-3)',marginTop:6}}>{produtosFiltrados.length} resultado{produtosFiltrados.length !== 1 ? 's' : ''}</p>}
+          </div>
+          {produtosFiltrados.length === 0 ? (
+            <div className="card"><EstadoVazio titulo="Nenhuma peça encontrada" sub="Tente outro termo de busca." /></div>
           ) : (
             <div className="produto-grid">
-              {produtos.map(p => {
+              {produtosFiltrados.map(p => {
                 const margem = margemPercentual(p.custo, p.preco);
                 const baixo = p.estoque <= ESTOQUE_BAIXO && p.estoque > 0;
                 const out   = p.estoque === 0;
@@ -1867,9 +2101,14 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir }) {
                           <span className="qty-val">{p.estoque}</span>
                           <button onClick={() => onAjustar(p.id, +1)}>+</button>
                         </div>
-                        <button className="btn btn-icon btn-danger" onClick={() => setConfirmDel(p)} aria-label="Excluir peça">
-                          <Icon name="trash" size={16}/>
-                        </button>
+                        <div style={{display:'flex', gap:6}}>
+                          <button className="btn btn-icon" onClick={() => abrirEditar(p)} aria-label="Editar peça" title="Editar">
+                            <Icon name="edit" size={15}/>
+                          </button>
+                          <button className="btn btn-icon btn-danger" onClick={() => setConfirmDel(p)} aria-label="Excluir peça">
+                            <Icon name="trash" size={16}/>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
