@@ -10,7 +10,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:migrate:run": "tsx scripts/migrate.ts"
+    "db:migrate:run": "tsx scripts/migrate.ts",
+    "sync:nuvemshop": "tsx scripts/sync-nuvemshop.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
