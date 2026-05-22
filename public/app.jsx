@@ -88,7 +88,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
   border-bottom: 1px solid var(--line);
   padding: 16px 28px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  position: sticky; top: 0; z-index: 10;
+  position: relative; z-index: 1;
 }
 .brand {
   display: flex; align-items: center;
