@@ -55,7 +55,7 @@ async function apiRequest<T>(
     headers: {
       'Content-Type':   'application/json',
       'Authentication': `bearer ${creds.accessToken}`,
-      'User-Agent':     `App ${process.env.NUVEMSHOP_CLIENT_ID} - Miva Dashboard`,
+      'User-Agent':     `App ${process.env.NUVEMSHOP_CLIENT_ID ?? '32372'} (pauloa65@gmail.com)`,
       ...(options.headers ?? {}),
     },
   });

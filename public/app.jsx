@@ -809,7 +809,10 @@ const API = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paginas }),
     });
-    if (!r.ok) throw new Error('Erro ao sincronizar pedidos');
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      throw new Error(data.error || 'Erro ao sincronizar pedidos');
+    }
     return r.json();
   },
 };
@@ -1261,35 +1264,7 @@ function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedido
           )}
         </section>
 
-        <section className="card">
-          <h2 className="section-title" style={{display: 'flex', alignItems: 'center', gap: 8}}>
-            Alerta de estoque
-            {dados.estoqueBaixo.length > 0 && (
-              <span className="chip warn"><span className="chip-dot"/>{dados.estoqueBaixo.length}</span>
-            )}
-          </h2>
-          <p className="section-sub">peças com {ESTOQUE_BAIXO} unidades ou menos</p>
-          {dados.estoqueBaixo.length === 0 ? (
-            <EstadoVazio titulo="Estoque tranquilo" sub="Nenhuma peça abaixo do alerta." />
-          ) : (
-            <div className="list">
-              {dados.estoqueBaixo.map(p => (
-                <div className="list-item" key={p.id}>
-                  <div className="list-item-main">
-                    <span className="list-item-name">{p.nome}</span>
-                    <span className="list-item-meta">{p.referencia} · {p.tipoBanho}</span>
-                  </div>
-                  <span className={'chip ' + (p.estoque === 0 ? 'danger' : 'warn')}>
-                    {p.estoque === 0 ? 'esgotado' : p.estoque + ' un.'}
-                  </span>
-                </div>
-              ))}
-              <div style={{marginTop: 12}}>
-                <button className="btn btn-small" onClick={() => setTela('produtos')}>Gerenciar estoque →</button>
-              </div>
-            </div>
-          )}
-        </section>
+        <AlertaEstoque dados={dados} setTela={setTela} />
       </div>
 
       {/* Meta mensal + Sync pedidos */}
@@ -1347,6 +1322,57 @@ function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedido
         </section>
       </div>
     </div>
+  );
+}
+
+const ALERTA_PAGE = 8;
+
+function AlertaEstoque({ dados, setTela }) {
+  const [verTodos, setVerTodos] = useState(false);
+
+  const esgotados  = dados.estoqueBaixo.filter(p => p.estoque === 0);
+  const baixo      = dados.estoqueBaixo.filter(p => p.estoque > 0);
+  const total      = dados.estoqueBaixo.length;
+  const visivel    = verTodos ? dados.estoqueBaixo : dados.estoqueBaixo.slice(0, ALERTA_PAGE);
+
+  return (
+    <section className="card">
+      <h2 className="section-title" style={{display:'flex', alignItems:'center', gap:8}}>
+        Alerta de estoque
+        {total > 0 && (
+          <span style={{display:'flex', gap:4}}>
+            {esgotados.length > 0 && <span className="chip danger"><span className="chip-dot"/>{esgotados.length} esgotados</span>}
+            {baixo.length > 0 && <span className="chip warn"><span className="chip-dot"/>{baixo.length} baixo</span>}
+          </span>
+        )}
+      </h2>
+      <p className="section-sub">peças com {ESTOQUE_BAIXO} unidades ou menos</p>
+      {total === 0 ? (
+        <EstadoVazio titulo="Estoque tranquilo" sub="Nenhuma peça abaixo do alerta." />
+      ) : (
+        <div className="list">
+          {visivel.map(p => (
+            <div className="list-item" key={p.id}>
+              <div className="list-item-main">
+                <span className="list-item-name">{p.nome}</span>
+                <span className="list-item-meta">{p.referencia}{p.tipoBanho ? ' · ' + p.tipoBanho : ''}</span>
+              </div>
+              <span className={'chip ' + (p.estoque === 0 ? 'danger' : 'warn')}>
+                {p.estoque === 0 ? 'esgotado' : p.estoque + ' un.'}
+              </span>
+            </div>
+          ))}
+          <div style={{marginTop:12, display:'flex', gap:8, alignItems:'center'}}>
+            <button className="btn btn-small" onClick={() => setTela('produtos')}>Gerenciar estoque →</button>
+            {total > ALERTA_PAGE && (
+              <button className="btn btn-small" onClick={() => setVerTodos(v => !v)}>
+                {verTodos ? 'Ver menos' : `Ver todos (${total})`}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
