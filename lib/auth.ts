@@ -7,10 +7,10 @@ const SECRET = new TextEncoder().encode(
 
 export const COOKIE_NAME = 'miva_session';
 
-const CREDENTIALS = { login: 'miva', senha: 'Miva2425' };
-
 export function checkCredentials(login: string, senha: string): boolean {
-  return login === CREDENTIALS.login && senha === CREDENTIALS.senha;
+  const expectedLogin = process.env.AUTH_LOGIN ?? 'miva';
+  const expectedSenha = process.env.AUTH_SENHA ?? 'Miva2425';
+  return login === expectedLogin && senha === expectedSenha;
 }
 
 export async function createToken(rememberMe: boolean): Promise<string> {

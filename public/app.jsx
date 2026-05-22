@@ -650,7 +650,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
   width: 100%; height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform .3s ease;
+  transition: transform .3s ease, opacity .35s ease;
 }
 .produto-card:hover .produto-img-wrap img { transform: scale(1.04); }
 .produto-img-placeholder {
@@ -888,7 +888,7 @@ function estornarEstoque(produtos, itens) {
   );
 }
 
-const novoId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const novoId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 12);
 
 /* ============================================================
    4. FORMATADORES & helpers
@@ -1408,9 +1408,15 @@ function NovaVenda({ produtos, onConfirm }) {
   const [pagamento, setPagamento] = useState('pix');
   const [parcelas, setParcelas]   = useState(2);
   const [busca, setBusca]         = useState('');
-  const [carrinho, setCarrinho]   = useState([]);  // [{ produtoId, nome, quantidade, precoUnitario, custoUnitario, estoqueDisp }]
+  const [carrinho, setCarrinho]   = useState(() => {
+    try { const s = sessionStorage.getItem('miva_carrinho'); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
   const [cliente, setCliente]     = useState('');
   const [salvando, setSalvando]   = useState(false);
+
+  useEffect(() => {
+    try { sessionStorage.setItem('miva_carrinho', JSON.stringify(carrinho)); } catch {}
+  }, [carrinho]);
 
   // calcula estoque disponível considerando o que já está no carrinho
   const estoqueDisp = (prodId) => {
@@ -1490,6 +1496,7 @@ function NovaVenda({ produtos, onConfirm }) {
       itens: carrinho.map(i => ({ ...i })),
     };
     await onConfirm(venda);
+    try { sessionStorage.removeItem('miva_carrinho'); } catch {}
     setSalvando(false);
   };
 
@@ -1590,7 +1597,7 @@ function NovaVenda({ produtos, onConfirm }) {
                           background:'var(--surface-2)', border:'1px solid var(--line)',
                         }}>
                           {p.imagemUrl
-                            ? <img src={p.imagemUrl} alt={p.nome} style={{width:'100%',height:'100%',objectFit:'cover'}} loading="lazy" />
+                            ? <img src={p.imagemUrl} alt={p.nome} style={{width:'100%',height:'100%',objectFit:'cover',opacity:0,transition:'opacity .3s'}} loading="lazy" onLoad={e => { e.target.style.opacity = 1; }} />
                             : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>💎</div>
                           }
                         </div>
@@ -2084,7 +2091,9 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
                   <div key={p.id} className={'produto-card' + (out ? ' out-stock' : baixo ? ' low-stock' : '')}>
                     <div className="produto-img-wrap">
                       {p.imagemUrl ? (
-                        <img src={p.imagemUrl} alt={p.nome} loading="lazy" />
+                        <img src={p.imagemUrl} alt={p.nome} loading="lazy"
+                             style={{opacity:0}}
+                             onLoad={e => { e.target.style.opacity = 1; }} />
                       ) : (
                         <div className="produto-img-placeholder">💎</div>
                       )}
