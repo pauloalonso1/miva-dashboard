@@ -92,11 +92,9 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    const [created] = await db.query.vendas.findMany({
-      where: eq(vendas.id, id),
-      with: { itens: true },
-      limit: 1,
-    });
+    const [createdVenda] = await db.select().from(vendas).where(eq(vendas.id, id));
+    const createdItens   = await db.select().from(itensVenda).where(eq(itensVenda.vendaId, id));
+    const created = { ...createdVenda, itens: createdItens };
 
     return NextResponse.json(toClient(created), { status: 201 });
   } catch (err) {
@@ -142,5 +140,5 @@ function toClient(v: VendaWithItens) {
 }
 
 function nanoid() {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 12);
 }
