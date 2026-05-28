@@ -970,7 +970,7 @@ const Icon = ({ name, size = 18, ...rest }) => {
    7. COMPONENTE PRINCIPAL
    ============================================================ */
 function App() {
-  const [tela, setTela]         = useState('painel');
+  const [tela, setTela]         = useState('lucro');
   const [produtos, setProdutos] = useState([]);
   const [vendas, setVendas]     = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -1149,11 +1149,11 @@ function App() {
    ============================================================ */
 function Sidebar({ tela, setTela }) {
   const items = [
+    { id: 'lucro',     label: 'Margem',     icon: 'percent'   },
     { id: 'painel',    label: 'Painel',     icon: 'dashboard' },
     { id: 'venda',     label: 'Nova venda', icon: 'plus'      },
     { id: 'historico', label: 'Histórico',  icon: 'history'   },
     { id: 'produtos',  label: 'Produtos',   icon: 'box'       },
-    { id: 'lucro',     label: 'Margem',     icon: 'percent'   },
     { id: 'clientes',  label: 'Clientes',   icon: 'users'     },
   ];
   return (
@@ -1263,30 +1263,8 @@ function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedido
         </section>
       </div>
 
-      {/* Mais vendidos & Estoque baixo */}
-      <div className="two-col">
-        <section className="card">
-          <h2 className="section-title">Mais vendidos no mês</h2>
-          <p className="section-sub">por quantidade</p>
-          {dados.maisVendidos.length === 0 ? (
-            <EstadoVazio titulo="Sem ranking ainda" sub="Os produtos campeões aparecem aqui." />
-          ) : (
-            <div className="list">
-              {dados.maisVendidos.map(p => (
-                <div className="list-item" key={p.id}>
-                  <div className="list-item-main">
-                    <span className="list-item-name">{p.nome}</span>
-                    <span className="list-item-meta">{p.qtd} {p.qtd === 1 ? 'unidade' : 'unidades'} vendidas</span>
-                  </div>
-                  <span className="list-item-value">{brl(p.total)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <AlertaEstoque dados={dados} setTela={setTela} />
-      </div>
+      {/* Alerta de estoque — largura total */}
+      <AlertaEstoque dados={dados} setTela={setTela} />
 
       {/* Meta mensal + Sync pedidos */}
       <div className="two-col" style={{marginTop: 0}}>
