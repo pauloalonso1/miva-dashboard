@@ -1136,7 +1136,7 @@ function App() {
         {tela === 'venda'     && <NovaVenda produtos={produtos} onConfirm={async v => { await registrarVenda(v); setTela('historico'); }} />}
         {tela === 'historico' && <Historico vendas={vendas} onExcluir={excluirVenda} onSyncPedidos={sincronizarPedidos} />}
         {tela === 'produtos'  && <Produtos  produtos={produtos} onCadastrar={adicionarProduto} onAjustar={ajustarEstoque} onExcluir={excluirProduto} onEditar={editarProduto} />}
-        {tela === 'lucro'     && <MargemLucro produtos={produtos} setTela={setTela} />}
+        {tela === 'lucro'     && <MargemLucro produtos={produtos} setTela={setTela} onCadastrar={adicionarProduto} />}
         {tela === 'clientes'  && <Clientes  clientes={clientes} vendas={vendas} />}
       </main>
       {toast && <div className={'toast ' + toast.kind}>{toast.message}</div>}
@@ -2363,9 +2363,69 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
 /* ============================================================
    13. TELA — MARGEM & LUCRO
    ============================================================ */
-function MargemLucro({ produtos, setTela }) {
-  const [busca, setBusca]       = useState('');
-  const [ordem, setOrdem]       = useState('markup_desc');
+const FORM_LUCRO_VAZIO = {
+  nome: '', referencia: '', tipoBanho: 'Ouro 18k', fornecedor: '',
+  vlCompra: '', despesa: '0', preco: '', estoque: '1',
+};
+
+function MargemLucro({ produtos, setTela, onCadastrar }) {
+  const [busca, setBusca]         = useState('');
+  const [ordem, setOrdem]         = useState('markup_desc');
+  const [modalAberto, setModal]   = useState(false);
+  const [form, setForm]           = useState(FORM_LUCRO_VAZIO);
+  const [erro, setErro]           = useState('');
+  const [salvando, setSalvando]   = useState(false);
+
+  /* cálculos ao vivo do modal */
+  const vlCompraNum = parseFloat((form.vlCompra + '').replace(',', '.')) || 0;
+  const despesaNum  = parseFloat((form.despesa  + '').replace(',', '.')) || 0;
+  const precoNum    = parseFloat((form.preco    + '').replace(',', '.')) || 0;
+  const custoTotal  = vlCompraNum + despesaNum;
+  const lucroUnitario = precoNum - custoTotal;
+  const markupNum   = custoTotal > 0 ? (lucroUnitario / custoTotal) * 100 : null;
+
+  const abrirModal = () => { setForm(FORM_LUCRO_VAZIO); setErro(''); setModal(true); };
+  const fecharModal = () => { setModal(false); setErro(''); };
+
+  const submitModal = async (e) => {
+    e.preventDefault();
+    setErro('');
+    if (!form.nome.trim() || !form.referencia.trim()) { setErro('Nome e referência são obrigatórios.'); return; }
+    if (isNaN(vlCompraNum) || vlCompraNum <= 0)       { setErro('Informe o VL Compra (preço pago ao fornecedor).'); return; }
+    if (isNaN(precoNum)    || precoNum <= 0)           { setErro('Informe o preço de venda.'); return; }
+    const estoque = parseInt(form.estoque, 10) || 0;
+    if (custoTotal > precoNum)                         { setErro('Preço de venda abaixo do custo total.'); return; }
+    setSalvando(true);
+    try {
+      await onCadastrar({
+        nome:       form.nome.trim(),
+        referencia: form.referencia.trim().toUpperCase(),
+        tipoBanho:  form.tipoBanho,
+        fornecedor: form.fornecedor.trim(),
+        vlCompra:   vlCompraNum,
+        despesa:    despesaNum,
+        preco:      precoNum,
+        estoque,
+      });
+      fecharModal();
+    } catch (err) {
+      setErro(err.message || 'Erro ao salvar. Tente novamente.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const campo = (label, key, opts = {}) => (
+    <div className="field">
+      <label className="label">{label}</label>
+      <input
+        className="input"
+        value={form[key]}
+        onChange={e => setForm(f => ({...f, [key]: e.target.value}))}
+        {...opts}
+      />
+    </div>
+  );
 
   const lista = useMemo(() => {
     const comCusto = produtos.filter(p => p.custo > 0 && p.preco > 0);
@@ -2387,11 +2447,11 @@ function MargemLucro({ produtos, setTela }) {
   const totais = useMemo(() => {
     const semFiltro = produtos.filter(p => p.custo > 0 && p.preco > 0);
     return {
-      capitalInvestido:  semFiltro.reduce((s, p) => s + (p.vlCompra > 0 ? p.vlCompra : p.custo) * p.estoque, 0),
-      receitaPotencial:  semFiltro.reduce((s, p) => s + p.preco * p.estoque, 0),
-      lucroPotencial:    semFiltro.reduce((s, p) => s + (p.preco - p.custo) * p.estoque, 0),
-      markupMedio:       semFiltro.length > 0 ? semFiltro.reduce((s, p) => s + markupPercentual(p.custo, p.preco), 0) / semFiltro.length : 0,
-      totalPecas:        semFiltro.length,
+      capitalInvestido: semFiltro.reduce((s, p) => s + (p.vlCompra > 0 ? p.vlCompra : p.custo) * p.estoque, 0),
+      receitaPotencial: semFiltro.reduce((s, p) => s + p.preco * p.estoque, 0),
+      lucroPotencial:   semFiltro.reduce((s, p) => s + (p.preco - p.custo) * p.estoque, 0),
+      markupMedio:      semFiltro.length > 0 ? semFiltro.reduce((s, p) => s + markupPercentual(p.custo, p.preco), 0) / semFiltro.length : 0,
+      totalPecas:       semFiltro.length,
     };
   }, [produtos]);
 
@@ -2428,7 +2488,7 @@ function MargemLucro({ produtos, setTela }) {
           <option value="lucro_desc">Maior lucro/peça</option>
           <option value="nome_asc">Nome A→Z</option>
         </select>
-        <button className="btn" onClick={() => setTela('produtos')} style={{whiteSpace:'nowrap'}}>
+        <button className="btn btn-primary" onClick={abrirModal} style={{whiteSpace:'nowrap'}}>
           <Icon name="plus" size={15}/> Cadastrar produto
         </button>
       </div>
@@ -2436,7 +2496,12 @@ function MargemLucro({ produtos, setTela }) {
       {/* Tabela */}
       {lista.length === 0 ? (
         <div className="card">
-          <EstadoVazio titulo="Nenhum produto encontrado" sub="Cadastre produtos com VL Compra e Preço para ver a análise." />
+          <div style={{textAlign:'center', padding:'40px 20px'}}>
+            <div style={{fontSize:32, marginBottom:12}}>📊</div>
+            <div style={{fontFamily:'var(--serif)', fontSize:20, marginBottom:8}}>Nenhum produto na análise</div>
+            <p style={{color:'var(--ink-3)', fontSize:13, marginBottom:16}}>Clique em <strong>Cadastrar produto</strong> para adicionar peças com controle de custo e margem.</p>
+            <button className="btn btn-primary" onClick={abrirModal}><Icon name="plus" size={15}/> Cadastrar primeiro produto</button>
+          </div>
         </div>
       ) : (
         <div className="card" style={{padding:0, overflow:'hidden'}}>
@@ -2504,9 +2569,136 @@ function MargemLucro({ produtos, setTela }) {
       )}
 
       {semCusto.length > 0 && (
-        <div style={{marginTop:14, padding:'10px 14px', background:'var(--warn-soft)', borderRadius:8, fontSize:12, color:'var(--warn)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8}}>
+        <div style={{marginTop:14, padding:'10px 14px', background:'var(--warn-soft)', borderRadius:8, fontSize:12, color:'var(--warn)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap'}}>
           <span><Icon name="alert" size={14}/> {semCusto.length} produto{semCusto.length > 1 ? 's' : ''} sem custo cadastrado — não {semCusto.length > 1 ? 'entram' : 'entra'} nesta análise.</span>
           <button className="btn btn-small" onClick={() => setTela('produtos')}>Completar dados →</button>
+        </div>
+      )}
+
+      {/* ── MODAL CADASTRO ── */}
+      {modalAberto && (
+        <div className="modal-backdrop" onClick={fecharModal}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:520, width:'100%'}}>
+
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4}}>
+              <h3 className="modal-title" style={{margin:0}}>Cadastrar produto</h3>
+              <button className="btn btn-icon" onClick={fecharModal} style={{marginRight:-4}}><Icon name="close" size={16}/></button>
+            </div>
+            <p style={{fontSize:12, color:'var(--ink-3)', marginBottom:16}}>Preencha os dados de custo e preço para calcular a margem automaticamente.</p>
+
+            <form onSubmit={submitModal}>
+              {/* Identificação */}
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+                <div className="field" style={{gridColumn:'1/-1'}}>
+                  <label className="label">Nome do produto *</label>
+                  <input className="input" value={form.nome} onChange={e => setForm(f=>({...f,nome:e.target.value}))} placeholder="Ex.: Pulseira Lumina" autoFocus />
+                </div>
+                <div className="field">
+                  <label className="label">Código / Referência *</label>
+                  <input className="input" value={form.referencia} onChange={e => setForm(f=>({...f,referencia:e.target.value}))} placeholder="88131 ou BR-001" />
+                </div>
+                <div className="field">
+                  <label className="label">Fornecedor</label>
+                  <input className="input" value={form.fornecedor} onChange={e => setForm(f=>({...f,fornecedor:e.target.value}))} placeholder="Gazin, Moncoes…" />
+                </div>
+                <div className="field">
+                  <label className="label">Tipo de banho</label>
+                  <select className="select" value={form.tipoBanho} onChange={e => setForm(f=>({...f,tipoBanho:e.target.value}))}>
+                    <option>Ouro 18k</option>
+                    <option>Ouro Rosé</option>
+                    <option>Ródio</option>
+                    <option>Prata 925</option>
+                    <option>Sem banho</option>
+                    <option>Outro</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="label">Qtd. em estoque</label>
+                  <input className="input" type="number" min="0" value={form.estoque} onChange={e => setForm(f=>({...f,estoque:e.target.value}))} placeholder="1" inputMode="numeric" />
+                </div>
+              </div>
+
+              {/* Divisor */}
+              <div style={{borderTop:'1px solid var(--line)', margin:'14px 0 12px', display:'flex', alignItems:'center', gap:8}}>
+                <span style={{fontSize:11, color:'var(--ink-3)', whiteSpace:'nowrap', background:'var(--surface)', paddingRight:8}}>Composição de custo</span>
+              </div>
+
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10}}>
+                <div className="field">
+                  <label className="label">VL Compra (R$) *</label>
+                  <input className="input" value={form.vlCompra} onChange={e => setForm(f=>({...f,vlCompra:e.target.value}))} placeholder="35,00" inputMode="decimal" />
+                  <div style={{fontSize:10, color:'var(--ink-3)', marginTop:3}}>preço pago ao fornecedor</div>
+                </div>
+                <div className="field">
+                  <label className="label">Despesa/peça (R$)</label>
+                  <input className="input" value={form.despesa} onChange={e => setForm(f=>({...f,despesa:e.target.value}))} placeholder="9,00" inputMode="decimal" />
+                  <div style={{fontSize:10, color:'var(--ink-3)', marginTop:3}}>rateio embalagem, frete…</div>
+                </div>
+                <div className="field">
+                  <label className="label">Custo total</label>
+                  <div className="input" style={{background:'var(--bg-deep)', color: custoTotal > 0 ? 'var(--ink)' : 'var(--ink-3)', fontWeight:custoTotal>0?600:400, cursor:'default'}}>
+                    {custoTotal > 0 ? brl(custoTotal) : '—'}
+                  </div>
+                  <div style={{fontSize:10, color:'var(--ink-3)', marginTop:3}}>VL Compra + Despesa</div>
+                </div>
+              </div>
+
+              {/* Divisor */}
+              <div style={{borderTop:'1px solid var(--line)', margin:'14px 0 12px'}}>
+                <span style={{fontSize:11, color:'var(--ink-3)'}}>Preço de venda</span>
+              </div>
+
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10}}>
+                <div className="field">
+                  <label className="label">VL Venda (R$) *</label>
+                  <input className="input" value={form.preco} onChange={e => setForm(f=>({...f,preco:e.target.value}))} placeholder="89,90" inputMode="decimal" />
+                </div>
+                <div className="field">
+                  <label className="label">Lucro / peça</label>
+                  <div className="input" style={{background:'var(--bg-deep)', fontWeight:600, cursor:'default',
+                    color: precoNum > 0 && custoTotal > 0 ? (lucroUnitario >= 0 ? 'var(--emerald)' : 'var(--danger)') : 'var(--ink-3)'}}>
+                    {precoNum > 0 && custoTotal > 0 ? brl(lucroUnitario) : '—'}
+                  </div>
+                </div>
+                <div className="field">
+                  <label className="label">Markup %</label>
+                  <div className="input" style={{background:'var(--bg-deep)', fontWeight:700, cursor:'default',
+                    color: markupNum === null ? 'var(--ink-3)' : markupNum >= 100 ? 'var(--emerald)' : markupNum >= 50 ? 'var(--ink)' : 'var(--danger)'}}>
+                    {markupNum !== null ? markupNum.toFixed(0) + '%' : '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview de resultado */}
+              {custoTotal > 0 && precoNum > 0 && (
+                <div style={{
+                  margin:'14px 0 0', padding:'12px 14px', borderRadius:8,
+                  background: lucroUnitario >= 0 ? 'var(--emerald-soft)' : 'var(--danger-soft)',
+                  display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8
+                }}>
+                  <div style={{fontSize:13}}>
+                    <strong>{form.nome || 'Produto'}</strong> · custo {brl(custoTotal)} → venda {brl(precoNum)}
+                  </div>
+                  <div style={{fontWeight:700, fontSize:15, color: lucroUnitario >= 0 ? 'var(--emerald)' : 'var(--danger)'}}>
+                    {lucroUnitario >= 0 ? '+' : ''}{brl(lucroUnitario)} &nbsp;({markupNum !== null ? markupNum.toFixed(0) : '—'}%)
+                  </div>
+                </div>
+              )}
+
+              {erro && (
+                <div style={{background:'var(--danger-soft)', color:'var(--danger)', borderRadius:8, padding:'8px 12px', fontSize:12, marginTop:12}}>
+                  {erro}
+                </div>
+              )}
+
+              <div style={{display:'flex', gap:8, justifyContent:'flex-end', marginTop:18}}>
+                <button type="button" className="btn" onClick={fecharModal} disabled={salvando}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" disabled={salvando}>
+                  {salvando ? 'Salvando…' : <><Icon name="plus" size={15}/> Adicionar ao catálogo</>}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
