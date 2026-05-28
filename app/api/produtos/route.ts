@@ -17,12 +17,17 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const vlCompra = Number(body.vlCompra ?? 0);
+    const despesa  = Number(body.despesa  ?? 0);
+    const custo    = vlCompra + despesa > 0 ? vlCompra + despesa : Number(body.custo ?? 0);
     const [created] = await db.insert(produtos).values({
       id:        body.id        ?? 'p_' + nanoid(),
       nome:      body.nome,
       referencia: body.referencia,
       tipoBanho: body.tipoBanho,
-      custo:     String(body.custo),
+      vlCompra:  String(vlCompra),
+      despesa:   String(despesa),
+      custo:     String(custo),
       preco:     String(body.preco),
       estoque:   body.estoque ?? 0,
       fornecedor: body.fornecedor ?? null,
@@ -41,6 +46,8 @@ function toClient(row: typeof produtos.$inferSelect) {
     nome:       row.nome,
     referencia: row.referencia,
     tipoBanho:  row.tipoBanho,
+    vlCompra:   Number(row.vlCompra),
+    despesa:    Number(row.despesa),
     custo:      Number(row.custo),
     preco:      Number(row.preco),
     estoque:    row.estoque,

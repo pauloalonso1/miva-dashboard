@@ -22,10 +22,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (body.nome        !== undefined) update.nome        = body.nome;
   if (body.referencia  !== undefined) update.referencia  = body.referencia;
   if (body.tipoBanho   !== undefined) update.tipoBanho   = body.tipoBanho;
-  if (body.custo       !== undefined) update.custo       = String(body.custo);
   if (body.preco       !== undefined) update.preco       = String(body.preco);
   if (body.estoque     !== undefined) update.estoque     = body.estoque;
   if (body.fornecedor  !== undefined) update.fornecedor  = body.fornecedor;
+  if (body.vlCompra !== undefined || body.despesa !== undefined) {
+    const vlCompra = Number(body.vlCompra ?? 0);
+    const despesa  = Number(body.despesa  ?? 0);
+    update.vlCompra = String(vlCompra);
+    update.despesa  = String(despesa);
+    update.custo    = String(vlCompra + despesa);
+  } else if (body.custo !== undefined) {
+    update.custo = String(body.custo);
+  }
 
   // Ajuste relativo de estoque (delta): { estoqueDelta: +1 | -1 }
   if (body.estoqueDelta !== undefined) {
@@ -55,6 +63,8 @@ function toClient(row: typeof produtos.$inferSelect) {
     nome:       row.nome,
     referencia: row.referencia,
     tipoBanho:  row.tipoBanho,
+    vlCompra:   Number(row.vlCompra),
+    despesa:    Number(row.despesa),
     custo:      Number(row.custo),
     preco:      Number(row.preco),
     estoque:    row.estoque,

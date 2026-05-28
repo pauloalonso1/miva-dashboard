@@ -885,6 +885,12 @@ function margemPercentual(custo, preco) {
   return ((preco - custo) / preco) * 100;
 }
 
+/** Markup percentual sobre o custo (igual ao % da planilha: lucro / custo * 100). */
+function markupPercentual(custo, preco) {
+  if (!custo || custo <= 0) return 0;
+  return ((preco - custo) / custo) * 100;
+}
+
 /** Aplica a baixa de estoque ao registrar uma venda.
  *  Retorna NOVO array de produtos (imutável). */
 function baixarEstoque(produtos, itens) {
@@ -1199,7 +1205,20 @@ function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedido
       .filter(p => p.estoque <= ESTOQUE_BAIXO)
       .sort((a, b) => a.estoque - b.estoque);
 
-    return { bruto, liquido, custo, lucro, ticket, ticketN: doMes.length, canais, pags, maisVendidos, estoqueBaixo };
+    // análise do catálogo (produtos com custo definido)
+    const comCusto = produtos.filter(p => p.custo > 0 && p.preco > 0);
+    const capitalInvestido = comCusto.reduce((s, p) => s + (p.vlCompra > 0 ? p.vlCompra : p.custo) * p.estoque, 0);
+    const receitaPotencial = comCusto.reduce((s, p) => s + p.preco * p.estoque, 0);
+    const lucroPotencial   = comCusto.reduce((s, p) => s + (p.preco - p.custo) * p.estoque, 0);
+    const markupMedio = comCusto.length > 0
+      ? comCusto.reduce((s, p) => s + markupPercentual(p.custo, p.preco), 0) / comCusto.length
+      : 0;
+    const topMargem = [...comCusto]
+      .sort((a, b) => markupPercentual(b.custo, b.preco) - markupPercentual(a.custo, a.preco))
+      .slice(0, 5);
+
+    return { bruto, liquido, custo, lucro, ticket, ticketN: doMes.length, canais, pags, maisVendidos, estoqueBaixo,
+             capitalInvestido, receitaPotencial, lucroPotencial, markupMedio, topMargem };
   }, [vendas, produtos]);
 
   const maxCanal = Math.max(dados.canais.online, dados.canais.cidade, 1);
@@ -1332,6 +1351,57 @@ function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedido
           <p style={{fontSize:11, color:'var(--ink-3)', marginTop:8}}>Importa até 600 pedidos pagos da Nuvemshop para o histórico.</p>
         </section>
       </div>
+
+      {/* Análise do catálogo */}
+      <section className="card" style={{marginTop: 0}}>
+        <h2 className="section-title">Análise do catálogo</h2>
+        <p className="section-sub">Baseado nos produtos cadastrados com custo e preço definidos</p>
+
+        <div className="kpi-grid" style={{marginTop:14}}>
+          <KPI label="Capital investido"  value={dados.capitalInvestido}  note="VL Compra × estoque atual" />
+          <KPI label="Receita potencial"  value={dados.receitaPotencial}  note="se vender todo o estoque" />
+          <KPI label="Lucro potencial"    value={dados.lucroPotencial}    note="receita − custo total" accent />
+          <div className="kpi">
+            <div className="kpi-label">Markup médio</div>
+            <div className="kpi-value" style={{color: dados.markupMedio >= 100 ? 'var(--emerald)' : dados.markupMedio >= 50 ? 'var(--ink)' : 'var(--danger)'}}>
+              {dados.markupMedio.toFixed(0)}<span className="cents">%</span>
+            </div>
+            <div className="kpi-note">lucro / custo total</div>
+          </div>
+        </div>
+
+        {dados.topMargem.length > 0 && (
+          <div style={{marginTop:16}}>
+            <div style={{fontSize:12, fontWeight:600, color:'var(--ink-2)', marginBottom:8}}>Top 5 por markup</div>
+            <div className="list">
+              {dados.topMargem.map(p => {
+                const mk = markupPercentual(p.custo, p.preco);
+                const lucroUn = p.preco - p.custo;
+                return (
+                  <div className="list-item" key={p.id}>
+                    <div className="list-item-main">
+                      <span className="list-item-name">{p.nome}</span>
+                      <span className="list-item-meta">
+                        custo {brl(p.custo)} · venda {brl(p.preco)} · lucro {brl(lucroUn)}/peça
+                      </span>
+                    </div>
+                    <span className="chip" style={{background: mk >= 100 ? 'var(--emerald-soft)' : 'var(--warn-soft)', color: mk >= 100 ? 'var(--emerald)' : 'var(--warn)', fontWeight:700}}>
+                      {mk.toFixed(0)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <button className="btn btn-small" style={{marginTop:12}} onClick={() => setTela('produtos')}>
+              Ver todos os produtos →
+            </button>
+          </div>
+        )}
+
+        {dados.topMargem.length === 0 && (
+          <EstadoVazio titulo="Nenhum produto com custo cadastrado" sub="Cadastre produtos com VL Compra e Preço para ver a análise." />
+        )}
+      </section>
     </div>
   );
 }
@@ -1935,7 +2005,7 @@ function Historico({ vendas, onExcluir, onSyncPedidos }) {
 function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
   const [form, setForm] = useState({
     nome: '', referencia: '', tipoBanho: 'Ouro 18k',
-    custo: '', preco: '', estoque: '', fornecedor: '',
+    vlCompra: '', despesa: '0', preco: '', estoque: '', fornecedor: '',
   });
   const [erro, setErro] = useState('');
   const [confirmDel, setConfirmDel] = useState(null);
@@ -1944,25 +2014,43 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
   const [editForm, setEditForm] = useState({});
   const [erroEdit, setErroEdit] = useState('');
 
+  const custoTotalForm = useMemo(() => {
+    const vc = parseFloat((form.vlCompra + '').replace(',', '.')) || 0;
+    const dp = parseFloat((form.despesa  + '').replace(',', '.')) || 0;
+    return vc + dp;
+  }, [form.vlCompra, form.despesa]);
+
+  const custoTotalEdit = useMemo(() => {
+    const vc = parseFloat((editForm.vlCompra + '').replace(',', '.')) || 0;
+    const dp = parseFloat((editForm.despesa  + '').replace(',', '.')) || 0;
+    return vc + dp;
+  }, [editForm.vlCompra, editForm.despesa]);
+
   const abrirEditar = (p) => {
     setEditando(p);
-    setEditForm({ nome: p.nome, referencia: p.referencia, tipoBanho: p.tipoBanho, custo: p.custo, preco: p.preco, fornecedor: p.fornecedor });
+    setEditForm({
+      nome: p.nome, referencia: p.referencia, tipoBanho: p.tipoBanho,
+      vlCompra: p.vlCompra ?? 0, despesa: p.despesa ?? 0, preco: p.preco,
+      fornecedor: p.fornecedor,
+    });
     setErroEdit('');
   };
 
   const salvarEdicao = async (e) => {
     e.preventDefault();
     setErroEdit('');
-    const custo = parseFloat((editForm.custo + '').replace(',', '.'));
-    const preco = parseFloat((editForm.preco + '').replace(',', '.'));
+    const vlCompra = parseFloat((editForm.vlCompra + '').replace(',', '.'));
+    const despesa  = parseFloat((editForm.despesa  + '').replace(',', '.'));
+    const preco    = parseFloat((editForm.preco    + '').replace(',', '.'));
     if (!editForm.nome.trim()) { setErroEdit('Nome é obrigatório.'); return; }
-    if (isNaN(custo) || isNaN(preco)) { setErroEdit('Custo e preço precisam ser números.'); return; }
-    if (preco < custo) { setErroEdit('Preço abaixo do custo.'); return; }
+    if (isNaN(vlCompra) || isNaN(despesa) || isNaN(preco)) { setErroEdit('VL Compra, despesa e preço precisam ser números.'); return; }
+    const custo = vlCompra + despesa;
+    if (preco < custo) { setErroEdit('Preço abaixo do custo total.'); return; }
     await onEditar(editando.id, {
       nome: editForm.nome.trim(),
       referencia: editForm.referencia.trim().toUpperCase(),
       tipoBanho: editForm.tipoBanho,
-      custo, preco,
+      vlCompra, despesa, preco,
       fornecedor: editForm.fornecedor?.trim() ?? '',
     });
     setEditando(null);
@@ -1983,20 +2071,22 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
   const submit = async (e) => {
     e.preventDefault();
     setErro('');
-    const custo = parseFloat((form.custo + '').replace(',', '.'));
-    const preco = parseFloat((form.preco + '').replace(',', '.'));
-    const estoque = parseInt(form.estoque, 10);
+    const vlCompra = parseFloat((form.vlCompra + '').replace(',', '.'));
+    const despesa  = parseFloat((form.despesa  + '').replace(',', '.'));
+    const preco    = parseFloat((form.preco    + '').replace(',', '.'));
+    const estoque  = parseInt(form.estoque, 10);
     if (!form.nome.trim() || !form.referencia.trim()) { setErro('Nome e referência são obrigatórios.'); return; }
-    if (isNaN(custo) || isNaN(preco) || isNaN(estoque)) { setErro('Custo, preço e estoque precisam ser números.'); return; }
-    if (preco < custo) { setErro('O preço de venda está abaixo do custo.'); return; }
+    if (isNaN(vlCompra) || isNaN(despesa) || isNaN(preco) || isNaN(estoque)) { setErro('Preencha todos os valores numéricos.'); return; }
+    const custo = vlCompra + despesa;
+    if (preco < custo) { setErro('O preço de venda está abaixo do custo total.'); return; }
     await onCadastrar({
       nome: form.nome.trim(),
       referencia: form.referencia.trim().toUpperCase(),
       tipoBanho: form.tipoBanho,
-      custo, preco, estoque,
+      vlCompra, despesa, preco, estoque,
       fornecedor: form.fornecedor.trim(),
     });
-    setForm({ nome: '', referencia: '', tipoBanho: 'Ouro 18k', custo: '', preco: '', estoque: '', fornecedor: '' });
+    setForm({ nome: '', referencia: '', tipoBanho: 'Ouro 18k', vlCompra: '', despesa: '0', preco: '', estoque: '', fornecedor: '' });
   };
 
   return (
@@ -2021,16 +2111,33 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
                 <div className="field">
                   <label className="label">Tipo de banho</label>
                   <select className="select" value={editForm.tipoBanho} onChange={e => setEditForm({...editForm, tipoBanho: e.target.value})}>
-                    <option>Ouro 18k</option><option>Ouro 24k</option><option>Ródio</option><option>Rose Gold</option><option>Prata</option><option>Sem banho</option>
+                    <option>Ouro 18k</option><option>Ouro Rosé</option><option>Ródio</option><option>Prata 925</option><option>Sem banho</option><option>Outro</option>
                   </select>
                 </div>
                 <div className="field">
-                  <label className="label">Custo (R$)</label>
-                  <input className="input" type="number" step="0.01" value={editForm.custo} onChange={e => setEditForm({...editForm, custo: e.target.value})} />
+                  <label className="label">VL Compra (R$)</label>
+                  <input className="input" type="number" step="0.01" value={editForm.vlCompra} onChange={e => setEditForm({...editForm, vlCompra: e.target.value})} />
                 </div>
                 <div className="field">
-                  <label className="label">Preço (R$)</label>
+                  <label className="label">Despesa por peça (R$)</label>
+                  <input className="input" type="number" step="0.01" value={editForm.despesa} onChange={e => setEditForm({...editForm, despesa: e.target.value})} />
+                </div>
+                <div className="field">
+                  <label className="label">Preço de venda (R$)</label>
                   <input className="input" type="number" step="0.01" value={editForm.preco} onChange={e => setEditForm({...editForm, preco: e.target.value})} />
+                </div>
+                <div style={{display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+                  {custoTotalEdit > 0 && (() => {
+                    const precoNum = parseFloat((editForm.preco + '').replace(',', '.')) || 0;
+                    const lucro = precoNum - custoTotalEdit;
+                    const margem = precoNum > 0 ? (lucro / custoTotalEdit * 100) : null;
+                    return (
+                      <div style={{background:'var(--bg-deep)',borderRadius:8,padding:'8px 10px',fontSize:11}}>
+                        <div style={{color:'var(--ink-3)',marginBottom:2}}>Custo total · Margem</div>
+                        <div style={{fontWeight:600,fontFamily:'var(--sans)'}}>{brl(custoTotalEdit)} · <span style={{color:margem>=100?'var(--emerald)':margem>=50?'var(--ink)':'var(--danger)'}}>{margem!==null?margem.toFixed(0)+'%':'—'}</span></div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               <div className="field">
@@ -2076,23 +2183,39 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
               </div>
               <div className="field-row">
                 <div className="field">
-                  <label className="label">Custo (R$)</label>
-                  <input className="input" value={form.custo} onChange={e => setForm({...form, custo: e.target.value})} placeholder="18,00" inputMode="decimal" />
+                  <label className="label">VL Compra (R$)</label>
+                  <input className="input" value={form.vlCompra} onChange={e => setForm({...form, vlCompra: e.target.value})} placeholder="35,00" inputMode="decimal" />
                 </div>
                 <div className="field">
-                  <label className="label">Preço (R$)</label>
-                  <input className="input" value={form.preco} onChange={e => setForm({...form, preco: e.target.value})} placeholder="65,00" inputMode="decimal" />
+                  <label className="label">Despesa por peça (R$)</label>
+                  <input className="input" value={form.despesa} onChange={e => setForm({...form, despesa: e.target.value})} placeholder="9,00" inputMode="decimal" />
                 </div>
               </div>
+              {custoTotalForm > 0 && (() => {
+                const precoNum = parseFloat((form.preco + '').replace(',', '.')) || 0;
+                const lucro = precoNum - custoTotalForm;
+                const markup = custoTotalForm > 0 ? (lucro / custoTotalForm * 100) : null;
+                return (
+                  <div style={{background:'var(--bg-deep)',borderRadius:8,padding:'8px 12px',marginBottom:8,display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,fontSize:12}}>
+                    <div><div style={{color:'var(--ink-3)',marginBottom:2}}>Custo total</div><div style={{fontWeight:600,fontFamily:'var(--sans)'}}>{brl(custoTotalForm)}</div></div>
+                    <div><div style={{color:'var(--ink-3)',marginBottom:2}}>Lucro/peça</div><div style={{fontWeight:600,fontFamily:'var(--sans)',color:lucro>0?'var(--emerald)':'var(--danger)'}}>{brl(lucro)}</div></div>
+                    <div><div style={{color:'var(--ink-3)',marginBottom:2}}>Markup %</div><div style={{fontWeight:600,fontFamily:'var(--sans)',color:markup===null?'var(--ink-3)':markup>=100?'var(--emerald)':markup>=50?'var(--ink)':'var(--danger)'}}>{markup!==null?markup.toFixed(0)+'%':'—'}</div></div>
+                  </div>
+                );
+              })()}
               <div className="field-row">
+                <div className="field">
+                  <label className="label">Preço de venda (R$)</label>
+                  <input className="input" value={form.preco} onChange={e => setForm({...form, preco: e.target.value})} placeholder="89,90" inputMode="decimal" />
+                </div>
                 <div className="field">
                   <label className="label">Estoque inicial</label>
                   <input className="input" value={form.estoque} onChange={e => setForm({...form, estoque: e.target.value})} placeholder="10" inputMode="numeric" />
                 </div>
-                <div className="field">
-                  <label className="label">Fornecedor</label>
-                  <input className="input" value={form.fornecedor} onChange={e => setForm({...form, fornecedor: e.target.value})} placeholder="Opcional" />
-                </div>
+              </div>
+              <div className="field">
+                <label className="label">Fornecedor</label>
+                <input className="input" value={form.fornecedor} onChange={e => setForm({...form, fornecedor: e.target.value})} placeholder="Opcional" />
               </div>
               {erro && <div style={{color: 'var(--danger)', fontSize: 12, marginBottom: 12}}>{erro}</div>}
               <button type="submit" className="btn btn-primary" style={{width: '100%'}}>
@@ -2122,9 +2245,11 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
             <div className="produto-grid">
               {produtosFiltrados.map(p => {
                 const temCusto = p.custo > 0;
-                const margem   = temCusto ? margemPercentual(p.custo, p.preco) : null;
+                const margem   = temCusto ? markupPercentual(p.custo, p.preco) : null;
+                const lucroUnit = temCusto ? p.preco - p.custo : null;
                 const baixo    = p.estoque > 0 && p.estoque <= ESTOQUE_BAIXO;
                 const out      = p.estoque === 0;
+                const temBreakdown = p.vlCompra > 0 || p.despesa > 0;
                 return (
                   <div key={p.id} className={'produto-card' + (out ? ' out-stock' : '')}>
                     <div className="produto-img-wrap">
@@ -2150,24 +2275,38 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
                         ) : null}
                       </div>
 
+                      {temBreakdown && (
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:4,background:'var(--bg-deep)',borderRadius:6,padding:'6px 8px',marginBottom:6,fontSize:11}}>
+                          <div><div style={{color:'var(--ink-3)'}}>VL Compra</div><div style={{fontWeight:500,fontFamily:'var(--sans)'}}>{brl(p.vlCompra)}</div></div>
+                          <div><div style={{color:'var(--ink-3)'}}>Despesa</div><div style={{fontWeight:500,fontFamily:'var(--sans)'}}>{brl(p.despesa)}</div></div>
+                          <div><div style={{color:'var(--ink-3)'}}>Custo total</div><div style={{fontWeight:500,fontFamily:'var(--sans)'}}>{brl(p.custo)}</div></div>
+                        </div>
+                      )}
+
                       <div className="produto-stats">
                         <div>
                           <div className="produto-stat-lbl">Preço</div>
                           <div className="produto-stat-val">{brl(p.preco)}</div>
                         </div>
                         <div>
-                          <div className="produto-stat-lbl">Margem</div>
-                          {margem !== null ? (
-                            <div className="produto-stat-val" style={{color: margem >= 40 ? 'var(--emerald)' : margem >= 20 ? 'var(--ink)' : 'var(--danger)'}}>
-                              {margem.toFixed(0)}%
+                          <div className="produto-stat-lbl">Lucro/peça</div>
+                          {lucroUnit !== null ? (
+                            <div className="produto-stat-val" style={{color: lucroUnit >= 0 ? 'var(--emerald)' : 'var(--danger)'}}>
+                              {brl(lucroUnit)}
                             </div>
                           ) : (
-                            <div className="produto-stat-val" style={{color:'var(--ink-3)', fontSize:12}}>sem custo</div>
+                            <div className="produto-stat-val" style={{color:'var(--ink-3)', fontSize:12}}>—</div>
                           )}
                         </div>
                         <div>
-                          <div className="produto-stat-lbl">Estoque</div>
-                          <div className="produto-stat-val">{p.estoque}</div>
+                          <div className="produto-stat-lbl">Margem</div>
+                          {margem !== null ? (
+                            <div className="produto-stat-val" style={{color: margem >= 100 ? 'var(--emerald)' : margem >= 50 ? 'var(--ink)' : 'var(--danger)'}}>
+                              {margem.toFixed(0)}%
+                            </div>
+                          ) : (
+                            <div className="produto-stat-val" style={{color:'var(--ink-3)', fontSize:12}}>—</div>
+                          )}
                         </div>
                       </div>
 

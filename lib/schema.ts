@@ -13,6 +13,8 @@ export const produtos = pgTable('produtos', {
   nome:                text('nome').notNull(),
   referencia:          text('referencia').notNull(),
   tipoBanho:           text('tipo_banho').notNull(),
+  vlCompra:            numeric('vl_compra', { precision: 10, scale: 2 }).default('0').notNull(),
+  despesa:             numeric('despesa',   { precision: 10, scale: 2 }).default('0').notNull(),
   custo:               numeric('custo', { precision: 10, scale: 2 }).notNull(),
   preco:               numeric('preco', { precision: 10, scale: 2 }).notNull(),
   estoque:             integer('estoque').notNull().default(0),
