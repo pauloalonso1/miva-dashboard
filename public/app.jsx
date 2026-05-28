@@ -955,6 +955,8 @@ const Icon = ({ name, size = 18, ...rest }) => {
     alert:     <><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.5 17.5c-.6 1 .1 2.5 1.3 2.5h16.4c1.2 0 1.9-1.4 1.3-2.5L13.7 3.9c-.6-1.1-2.2-1.1-2.8 0z"/></>,
     sparkle:   <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></>,
     edit:      <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
+    percent:   <><circle cx="9" cy="9" r="2"/><circle cx="15" cy="15" r="2"/><path d="M5 19L19 5"/></>,
+    trending:  <><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -1134,6 +1136,7 @@ function App() {
         {tela === 'venda'     && <NovaVenda produtos={produtos} onConfirm={async v => { await registrarVenda(v); setTela('historico'); }} />}
         {tela === 'historico' && <Historico vendas={vendas} onExcluir={excluirVenda} onSyncPedidos={sincronizarPedidos} />}
         {tela === 'produtos'  && <Produtos  produtos={produtos} onCadastrar={adicionarProduto} onAjustar={ajustarEstoque} onExcluir={excluirProduto} onEditar={editarProduto} />}
+        {tela === 'lucro'     && <MargemLucro produtos={produtos} setTela={setTela} />}
         {tela === 'clientes'  && <Clientes  clientes={clientes} vendas={vendas} />}
       </main>
       {toast && <div className={'toast ' + toast.kind}>{toast.message}</div>}
@@ -1150,6 +1153,7 @@ function Sidebar({ tela, setTela }) {
     { id: 'venda',     label: 'Nova venda', icon: 'plus'      },
     { id: 'historico', label: 'Histórico',  icon: 'history'   },
     { id: 'produtos',  label: 'Produtos',   icon: 'box'       },
+    { id: 'lucro',     label: 'Margem',     icon: 'percent'   },
     { id: 'clientes',  label: 'Clientes',   icon: 'users'     },
   ];
   return (
@@ -2357,7 +2361,167 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
 }
 
 /* ============================================================
-   13. TELA — CLIENTES
+   13. TELA — MARGEM & LUCRO
+   ============================================================ */
+function MargemLucro({ produtos, setTela }) {
+  const [busca, setBusca]       = useState('');
+  const [ordem, setOrdem]       = useState('markup_desc');
+
+  const lista = useMemo(() => {
+    const comCusto = produtos.filter(p => p.custo > 0 && p.preco > 0);
+    const q = busca.trim().toLowerCase();
+    const filtrados = q
+      ? comCusto.filter(p => p.nome.toLowerCase().includes(q) || (p.fornecedor && p.fornecedor.toLowerCase().includes(q)))
+      : comCusto;
+    return [...filtrados].sort((a, b) => {
+      const mkA = markupPercentual(a.custo, a.preco);
+      const mkB = markupPercentual(b.custo, b.preco);
+      if (ordem === 'markup_desc')  return mkB - mkA;
+      if (ordem === 'markup_asc')   return mkA - mkB;
+      if (ordem === 'lucro_desc')   return (b.preco - b.custo) - (a.preco - a.custo);
+      if (ordem === 'nome_asc')     return a.nome.localeCompare(b.nome);
+      return 0;
+    });
+  }, [produtos, busca, ordem]);
+
+  const totais = useMemo(() => {
+    const semFiltro = produtos.filter(p => p.custo > 0 && p.preco > 0);
+    return {
+      capitalInvestido:  semFiltro.reduce((s, p) => s + (p.vlCompra > 0 ? p.vlCompra : p.custo) * p.estoque, 0),
+      receitaPotencial:  semFiltro.reduce((s, p) => s + p.preco * p.estoque, 0),
+      lucroPotencial:    semFiltro.reduce((s, p) => s + (p.preco - p.custo) * p.estoque, 0),
+      markupMedio:       semFiltro.length > 0 ? semFiltro.reduce((s, p) => s + markupPercentual(p.custo, p.preco), 0) / semFiltro.length : 0,
+      totalPecas:        semFiltro.length,
+    };
+  }, [produtos]);
+
+  const semCusto = produtos.filter(p => !p.custo || p.custo === 0 || !p.preco || p.preco === 0);
+
+  return (
+    <div>
+      <h1 className="screen-title">Margem & Lucro</h1>
+      <p className="screen-sub">{totais.totalPecas} peças com custo cadastrado · planilha de rentabilidade</p>
+
+      {/* KPIs */}
+      <div className="kpi-grid">
+        <KPI label="Capital investido"  value={totais.capitalInvestido}  note="VL Compra × estoque" />
+        <KPI label="Receita potencial"  value={totais.receitaPotencial}  note="se vender todo o estoque" />
+        <KPI label="Lucro potencial"    value={totais.lucroPotencial}    note="receita − custo total" accent />
+        <div className="kpi">
+          <div className="kpi-label">Markup médio</div>
+          <div className="kpi-value" style={{color: totais.markupMedio >= 100 ? 'var(--emerald)' : totais.markupMedio >= 50 ? 'var(--ink)' : 'var(--danger)'}}>
+            {totais.markupMedio.toFixed(0)}<span className="cents">%</span>
+          </div>
+          <div className="kpi-note">lucro / custo total</div>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div style={{display:'flex', gap:10, marginBottom:14, flexWrap:'wrap', alignItems:'center'}}>
+        <div className="search-wrap" style={{flex:'1 1 200px', minWidth:180}}>
+          <span className="search-icon"><Icon name="search" size={16}/></span>
+          <input className="input" placeholder="Filtrar por produto ou fornecedor…" value={busca} onChange={e => setBusca(e.target.value)} />
+        </div>
+        <select className="select" style={{minWidth:160}} value={ordem} onChange={e => setOrdem(e.target.value)}>
+          <option value="markup_desc">Maior markup</option>
+          <option value="markup_asc">Menor markup</option>
+          <option value="lucro_desc">Maior lucro/peça</option>
+          <option value="nome_asc">Nome A→Z</option>
+        </select>
+        <button className="btn" onClick={() => setTela('produtos')} style={{whiteSpace:'nowrap'}}>
+          <Icon name="plus" size={15}/> Cadastrar produto
+        </button>
+      </div>
+
+      {/* Tabela */}
+      {lista.length === 0 ? (
+        <div className="card">
+          <EstadoVazio titulo="Nenhum produto encontrado" sub="Cadastre produtos com VL Compra e Preço para ver a análise." />
+        </div>
+      ) : (
+        <div className="card" style={{padding:0, overflow:'hidden'}}>
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
+              <thead>
+                <tr style={{background:'var(--bg-deep)', borderBottom:'2px solid var(--line-2)'}}>
+                  <th style={thStyle('left')}>Produto</th>
+                  <th style={thStyle('left')}>Fornecedor</th>
+                  <th style={thStyle('right')}>VL Compra</th>
+                  <th style={thStyle('right')}>Despesa</th>
+                  <th style={thStyle('right')}>Custo Total</th>
+                  <th style={thStyle('right')}>VL Venda</th>
+                  <th style={thStyle('right')}>Lucro/peça</th>
+                  <th style={thStyle('right')}>Markup %</th>
+                  <th style={thStyle('right')}>Estoque</th>
+                  <th style={thStyle('right')}>Lucro total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lista.map((p, i) => {
+                  const mk      = markupPercentual(p.custo, p.preco);
+                  const lucroUn = p.preco - p.custo;
+                  const lucroTt = lucroUn * p.estoque;
+                  const mkColor = mk >= 100 ? 'var(--emerald)' : mk >= 50 ? 'var(--ink)' : 'var(--danger)';
+                  return (
+                    <tr key={p.id} style={{borderBottom:'1px solid var(--line)', background: i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)'}}>
+                      <td style={tdStyle('left')}>
+                        <div style={{fontWeight:500}}>{p.nome}</div>
+                        <div style={{fontSize:11, color:'var(--ink-3)'}}>{p.referencia}{p.tipoBanho ? ' · ' + p.tipoBanho : ''}</div>
+                      </td>
+                      <td style={tdStyle('left')}><span style={{fontSize:12, color:'var(--ink-2)'}}>{p.fornecedor || '—'}</span></td>
+                      <td style={tdStyle('right')}>{p.vlCompra > 0 ? brl(p.vlCompra) : <span style={{color:'var(--ink-3)'}}>—</span>}</td>
+                      <td style={tdStyle('right')}>{p.despesa > 0 ? brl(p.despesa) : <span style={{color:'var(--ink-3)'}}>—</span>}</td>
+                      <td style={tdStyle('right')}><strong>{brl(p.custo)}</strong></td>
+                      <td style={tdStyle('right')}>{brl(p.preco)}</td>
+                      <td style={tdStyle('right')}><span style={{color: lucroUn >= 0 ? 'var(--emerald)' : 'var(--danger)', fontWeight:600}}>{brl(lucroUn)}</span></td>
+                      <td style={tdStyle('right')}>
+                        <span style={{fontWeight:700, color:mkColor, background: mk >= 100 ? 'var(--emerald-soft)' : mk >= 50 ? 'var(--bg-deep)' : 'var(--danger-soft)', padding:'2px 8px', borderRadius:99, fontSize:12}}>
+                          {mk.toFixed(0)}%
+                        </span>
+                      </td>
+                      <td style={tdStyle('right')}><span style={{fontSize:12}}>{p.estoque}</span></td>
+                      <td style={tdStyle('right')}><span style={{color: lucroTt >= 0 ? 'var(--emerald)' : 'var(--danger)', fontWeight:600, fontFamily:'var(--sans)'}}>{brl(lucroTt)}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{background:'var(--bg-deep)', borderTop:'2px solid var(--line-2)', fontWeight:700}}>
+                  <td style={tdStyle('left')} colSpan={2}><span style={{fontSize:12}}>TOTAL · {lista.length} produtos</span></td>
+                  <td style={tdStyle('right')}></td>
+                  <td style={tdStyle('right')}></td>
+                  <td style={tdStyle('right')}>{brl(lista.reduce((s, p) => s + p.custo, 0))}</td>
+                  <td style={tdStyle('right')}>{brl(lista.reduce((s, p) => s + p.preco, 0))}</td>
+                  <td style={{...tdStyle('right'), color:'var(--emerald)'}}>{brl(lista.reduce((s, p) => s + (p.preco - p.custo), 0))}</td>
+                  <td style={tdStyle('right')}></td>
+                  <td style={tdStyle('right')}>{lista.reduce((s, p) => s + p.estoque, 0)}</td>
+                  <td style={{...tdStyle('right'), color:'var(--emerald)'}}>{brl(lista.reduce((s, p) => s + (p.preco - p.custo) * p.estoque, 0))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {semCusto.length > 0 && (
+        <div style={{marginTop:14, padding:'10px 14px', background:'var(--warn-soft)', borderRadius:8, fontSize:12, color:'var(--warn)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8}}>
+          <span><Icon name="alert" size={14}/> {semCusto.length} produto{semCusto.length > 1 ? 's' : ''} sem custo cadastrado — não {semCusto.length > 1 ? 'entram' : 'entra'} nesta análise.</span>
+          <button className="btn btn-small" onClick={() => setTela('produtos')}>Completar dados →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function thStyle(align) {
+  return { padding:'10px 14px', textAlign:align, fontSize:11, fontWeight:600, color:'var(--ink-2)', textTransform:'uppercase', letterSpacing:'0.04em', whiteSpace:'nowrap' };
+}
+function tdStyle(align) {
+  return { padding:'10px 14px', textAlign:align, verticalAlign:'middle' };
+}
+
+/* ============================================================
+   14. TELA — CLIENTES
    ============================================================ */
 function Clientes({ clientes, vendas }) {
   const ranking = useMemo(() => {
