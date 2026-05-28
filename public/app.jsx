@@ -2361,6 +2361,86 @@ function Produtos({ produtos, onCadastrar, onAjustar, onExcluir, onEditar }) {
 }
 
 /* ============================================================
+   COMPONENTE — SELETOR DE FORNECEDOR
+   ============================================================ */
+const FORNECEDORES_BASE = ['Gazin', 'Moncoes'];
+
+function SeletorFornecedor({ value, onChange }) {
+  const [lista, setLista] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('miva_fornecedores') || '[]');
+      const merged = [...new Set([...FORNECEDORES_BASE, ...saved])];
+      return merged;
+    } catch { return FORNECEDORES_BASE; }
+  });
+  const [adicionando, setAdicionando] = useState(false);
+  const [novoNome, setNovoNome]       = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (adicionando && inputRef.current) inputRef.current.focus();
+  }, [adicionando]);
+
+  const salvarNovo = () => {
+    const nome = novoNome.trim();
+    if (!nome) { setAdicionando(false); setNovoNome(''); return; }
+    if (!lista.includes(nome)) {
+      const nova = [...lista, nome];
+      setLista(nova);
+      try {
+        const extras = nova.filter(f => !FORNECEDORES_BASE.includes(f));
+        localStorage.setItem('miva_fornecedores', JSON.stringify(extras));
+      } catch {}
+    }
+    onChange(nome);
+    setAdicionando(false);
+    setNovoNome('');
+  };
+
+  if (adicionando) {
+    return (
+      <div style={{display:'flex', gap:6}}>
+        <input
+          ref={inputRef}
+          className="input"
+          placeholder="Nome do fornecedor"
+          value={novoNome}
+          onChange={e => setNovoNome(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); salvarNovo(); } if (e.key === 'Escape') { setAdicionando(false); setNovoNome(''); } }}
+        />
+        <button type="button" className="btn btn-primary" style={{whiteSpace:'nowrap', padding:'0 12px'}} onClick={salvarNovo}>OK</button>
+        <button type="button" className="btn" style={{padding:'0 10px'}} onClick={() => { setAdicionando(false); setNovoNome(''); }}>
+          <Icon name="close" size={14}/>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{display:'flex', gap:6}}>
+      <select
+        className="select"
+        style={{flex:1}}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      >
+        <option value="">— Selecionar —</option>
+        {lista.map(f => <option key={f} value={f}>{f}</option>)}
+      </select>
+      <button
+        type="button"
+        className="btn"
+        style={{whiteSpace:'nowrap', padding:'0 12px', fontSize:12}}
+        onClick={() => setAdicionando(true)}
+        title="Adicionar novo fornecedor"
+      >
+        + Adicionar
+      </button>
+    </div>
+  );
+}
+
+/* ============================================================
    13. TELA — MARGEM & LUCRO
    ============================================================ */
 const FORM_LUCRO_VAZIO = {
@@ -2599,7 +2679,7 @@ function MargemLucro({ produtos, setTela, onCadastrar }) {
                 </div>
                 <div className="field">
                   <label className="label">Fornecedor</label>
-                  <input className="input" value={form.fornecedor} onChange={e => setForm(f=>({...f,fornecedor:e.target.value}))} placeholder="Gazin, Moncoes…" />
+                  <SeletorFornecedor value={form.fornecedor} onChange={v => setForm(f=>({...f,fornecedor:v}))} />
                 </div>
                 <div className="field">
                   <label className="label">Tipo de banho</label>
