@@ -1211,7 +1211,7 @@ function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedido
 
     // análise do catálogo (produtos com custo definido)
     const comCusto = produtos.filter(p => p.custo > 0 && p.preco > 0);
-    const capitalInvestido = comCusto.reduce((s, p) => s + (p.vlCompra > 0 ? p.vlCompra : p.custo) * p.estoque, 0);
+    const capitalInvestido = comCusto.reduce((s, p) => s + p.custo * p.estoque, 0);
     const receitaPotencial = comCusto.reduce((s, p) => s + p.preco * p.estoque, 0);
     const lucroPotencial   = comCusto.reduce((s, p) => s + (p.preco - p.custo) * p.estoque, 0);
     const markupMedio = comCusto.length > 0
@@ -1362,7 +1362,7 @@ function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedido
         <p className="section-sub">Baseado nos produtos cadastrados com custo e preço definidos</p>
 
         <div className="kpi-grid" style={{marginTop:14}}>
-          <KPI label="Capital investido"  value={dados.capitalInvestido}  note="VL Compra × estoque atual" />
+          <KPI label="Capital investido"  value={dados.capitalInvestido}  note="Custo Total × estoque atual" />
           <KPI label="Receita potencial"  value={dados.receitaPotencial}  note="se vender todo o estoque" />
           <KPI label="Lucro potencial"    value={dados.lucroPotencial}    note="receita − custo total" accent />
           <div className="kpi">
@@ -2527,7 +2527,7 @@ function MargemLucro({ produtos, setTela, onCadastrar }) {
   const totais = useMemo(() => {
     const semFiltro = produtos.filter(p => p.custo > 0 && p.preco > 0);
     return {
-      capitalInvestido: semFiltro.reduce((s, p) => s + (p.vlCompra > 0 ? p.vlCompra : p.custo) * p.estoque, 0),
+      capitalInvestido: semFiltro.reduce((s, p) => s + p.custo * p.estoque, 0),
       receitaPotencial: semFiltro.reduce((s, p) => s + p.preco * p.estoque, 0),
       lucroPotencial:   semFiltro.reduce((s, p) => s + (p.preco - p.custo) * p.estoque, 0),
       markupMedio:      semFiltro.length > 0 ? semFiltro.reduce((s, p) => s + markupPercentual(p.custo, p.preco), 0) / semFiltro.length : 0,
@@ -2544,7 +2544,7 @@ function MargemLucro({ produtos, setTela, onCadastrar }) {
 
       {/* KPIs */}
       <div className="kpi-grid">
-        <KPI label="Capital investido"  value={totais.capitalInvestido}  note="VL Compra × estoque" />
+        <KPI label="Capital investido"  value={totais.capitalInvestido}  note="Custo Total × estoque" />
         <KPI label="Receita potencial"  value={totais.receitaPotencial}  note="se vender todo o estoque" />
         <KPI label="Lucro potencial"    value={totais.lucroPotencial}    note="receita − custo total" accent />
         <div className="kpi">
