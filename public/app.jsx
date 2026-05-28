@@ -1136,7 +1136,7 @@ function App() {
         {tela === 'venda'     && <NovaVenda produtos={produtos} onConfirm={async v => { await registrarVenda(v); setTela('historico'); }} />}
         {tela === 'historico' && <Historico vendas={vendas} onExcluir={excluirVenda} onSyncPedidos={sincronizarPedidos} />}
         {tela === 'produtos'  && <Produtos  produtos={produtos} onCadastrar={adicionarProduto} onAjustar={ajustarEstoque} onExcluir={excluirProduto} onEditar={editarProduto} />}
-        {tela === 'lucro'     && <MargemLucro produtos={produtos} setTela={setTela} onCadastrar={adicionarProduto} />}
+        {tela === 'lucro'     && <MargemLucro produtos={produtos} setTela={setTela} onCadastrar={adicionarProduto} onEditar={editarProduto} onExcluir={excluirProduto} />}
         {tela === 'clientes'  && <Clientes  clientes={clientes} vendas={vendas} />}
       </main>
       {toast && <div className={'toast ' + toast.kind}>{toast.message}</div>}
@@ -2363,13 +2363,22 @@ const FORM_LUCRO_VAZIO = {
   vlCompra: '', despesa: '0', preco: '', estoque: '1',
 };
 
-function MargemLucro({ produtos, setTela, onCadastrar }) {
+function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
   const [busca, setBusca]         = useState('');
   const [ordem, setOrdem]         = useState('markup_desc');
   const [modalAberto, setModal]   = useState(false);
   const [form, setForm]           = useState(FORM_LUCRO_VAZIO);
   const [erro, setErro]           = useState('');
   const [salvando, setSalvando]   = useState(false);
+
+  const [editando, setEditando]         = useState(null);
+  const [editForm, setEditForm]         = useState(FORM_LUCRO_VAZIO);
+  const [editErro, setEditErro]         = useState('');
+  const [editSalvando, setEditSalvando] = useState(false);
+  const [confirmDel, setConfirmDel]     = useState(null);
+  const fileInputRef                    = useRef(null);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importando, setImportando]     = useState(false);
 
   /* cálculos ao vivo do modal */
   const vlCompraNum = parseFloat((form.vlCompra + '').replace(',', '.')) || 0;
@@ -2379,8 +2388,87 @@ function MargemLucro({ produtos, setTela, onCadastrar }) {
   const lucroUnitario = precoNum - custoTotal;
   const markupNum   = custoTotal > 0 ? (lucroUnitario / custoTotal) * 100 : null;
 
+  const editVlCompra = parseFloat((editForm.vlCompra + '').replace(',', '.')) || 0;
+  const editDespesa  = parseFloat((editForm.despesa  + '').replace(',', '.')) || 0;
+  const editPrecoNum = parseFloat((editForm.preco    + '').replace(',', '.')) || 0;
+  const editCusto    = editVlCompra + editDespesa;
+  const editLucro    = editPrecoNum - editCusto;
+  const editMarkup   = editCusto > 0 ? (editLucro / editCusto) * 100 : null;
+
   const abrirModal = () => { setForm(FORM_LUCRO_VAZIO); setErro(''); setModal(true); };
   const fecharModal = () => { setModal(false); setErro(''); };
+
+  const abrirEditar = (p) => {
+    setEditando(p);
+    setEditForm({
+      nome:       p.nome,
+      referencia: p.referencia || '',
+      tipoBanho:  p.tipoBanho || 'Ouro 18k',
+      fornecedor: p.fornecedor || '',
+      vlCompra:   p.vlCompra > 0 ? String(p.vlCompra) : '',
+      despesa:    String(p.despesa ?? 0),
+      preco:      p.preco > 0 ? String(p.preco) : '',
+      estoque:    String(p.estoque ?? 1),
+    });
+    setEditErro('');
+  };
+  const fecharEditar = () => { setEditando(null); setEditErro(''); };
+
+  const submitEditar = async (e) => {
+    e.preventDefault();
+    setEditErro('');
+    if (!editForm.nome.trim() || !editForm.referencia.trim()) { setEditErro('Nome e referência são obrigatórios.'); return; }
+    if (editVlCompra <= 0)        { setEditErro('Informe o VL Compra.'); return; }
+    if (editPrecoNum <= 0)        { setEditErro('Informe o preço de venda.'); return; }
+    if (editCusto > editPrecoNum) { setEditErro('Preço de venda abaixo do custo total.'); return; }
+    setEditSalvando(true);
+    try {
+      await onEditar(editando.id, {
+        nome:       editForm.nome.trim(),
+        referencia: editForm.referencia.trim().toUpperCase(),
+        tipoBanho:  editForm.tipoBanho,
+        fornecedor: editForm.fornecedor.trim(),
+        vlCompra:   editVlCompra,
+        despesa:    editDespesa,
+        preco:      editPrecoNum,
+        estoque:    parseInt(editForm.estoque, 10) || 0,
+      });
+      fecharEditar();
+    } catch (err) {
+      setEditErro(err.message || 'Erro ao salvar.');
+    } finally {
+      setEditSalvando(false);
+    }
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImportando(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/import-planilha', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao processar arquivo.');
+      if (data.total === 0) throw new Error('Nenhum produto encontrado. Verifique a estrutura da planilha.');
+      setImportPreview({ produtos: data.produtos, salvando: false });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setImportando(false);
+    }
+  };
+
+  const confirmarImport = async () => {
+    if (!importPreview) return;
+    setImportPreview(p => ({ ...p, salvando: true }));
+    for (const p of importPreview.produtos) {
+      try { await onCadastrar(p); } catch {}
+    }
+    setImportPreview(null);
+  };
 
   const submitModal = async (e) => {
     e.preventDefault();
@@ -2483,6 +2571,10 @@ function MargemLucro({ produtos, setTela, onCadastrar }) {
           <option value="lucro_desc">Maior lucro/peça</option>
           <option value="nome_asc">Nome A→Z</option>
         </select>
+        <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={handleImportFile} />
+        <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importando} style={{whiteSpace:'nowrap'}}>
+          {importando ? 'Lendo…' : <><Icon name="trending" size={15}/> Importar planilha</>}
+        </button>
         <button className="btn btn-primary" onClick={abrirModal} style={{whiteSpace:'nowrap'}}>
           <Icon name="plus" size={15}/> Cadastrar produto
         </button>
@@ -2514,6 +2606,7 @@ function MargemLucro({ produtos, setTela, onCadastrar }) {
                   <th style={thStyle('right')}>Markup %</th>
                   <th style={thStyle('right')}>Estoque</th>
                   <th style={thStyle('right')}>Lucro total</th>
+                  <th style={thStyle('center')}></th>
                 </tr>
               </thead>
               <tbody>
@@ -2541,6 +2634,14 @@ function MargemLucro({ produtos, setTela, onCadastrar }) {
                       </td>
                       <td style={tdStyle('right')}><span style={{fontSize:12}}>{p.estoque}</span></td>
                       <td style={tdStyle('right')}><span style={{color: lucroTt >= 0 ? 'var(--emerald)' : 'var(--danger)', fontWeight:600, fontFamily:'var(--sans)'}}>{brl(lucroTt)}</span></td>
+                      <td style={{...tdStyle('center'), whiteSpace:'nowrap'}}>
+                        <button className="btn btn-icon" onClick={() => abrirEditar(p)} title="Editar" aria-label="Editar" style={{marginRight:4}}>
+                          <Icon name="edit" size={15}/>
+                        </button>
+                        <button className="btn btn-icon btn-danger" onClick={() => setConfirmDel(p)} title="Excluir" aria-label="Excluir">
+                          <Icon name="trash" size={15}/>
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -2556,6 +2657,7 @@ function MargemLucro({ produtos, setTela, onCadastrar }) {
                   <td style={tdStyle('right')}></td>
                   <td style={tdStyle('right')}>{lista.reduce((s, p) => s + p.estoque, 0)}</td>
                   <td style={{...tdStyle('right'), color:'var(--emerald)'}}>{brl(lista.reduce((s, p) => s + (p.preco - p.custo) * p.estoque, 0))}</td>
+                  <td></td>
                 </tr>
               </tfoot>
             </table>
@@ -2693,6 +2795,176 @@ function MargemLucro({ produtos, setTela, onCadastrar }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL EDITAR ── */}
+      {editando && (
+        <div className="modal-backdrop" onClick={fecharEditar}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:520, width:'100%'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4}}>
+              <h3 className="modal-title" style={{margin:0}}>Editar produto</h3>
+              <button className="btn btn-icon" onClick={fecharEditar} style={{marginRight:-4}}><Icon name="close" size={16}/></button>
+            </div>
+            <form onSubmit={submitEditar}>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+                <div className="field" style={{gridColumn:'1/-1'}}>
+                  <label className="label">Nome do produto *</label>
+                  <input className="input" value={editForm.nome} onChange={e => setEditForm(f=>({...f,nome:e.target.value}))} autoFocus />
+                </div>
+                <div className="field">
+                  <label className="label">Código / Referência *</label>
+                  <input className="input" value={editForm.referencia} onChange={e => setEditForm(f=>({...f,referencia:e.target.value}))} />
+                </div>
+                <div className="field">
+                  <label className="label">Fornecedor</label>
+                  <SeletorFornecedor value={editForm.fornecedor} onChange={v => setEditForm(f=>({...f,fornecedor:v}))} />
+                </div>
+                <div className="field">
+                  <label className="label">Tipo de banho</label>
+                  <select className="select" value={editForm.tipoBanho} onChange={e => setEditForm(f=>({...f,tipoBanho:e.target.value}))}>
+                    <option>Ouro 18k</option>
+                    <option>Ouro Rosé</option>
+                    <option>Ródio</option>
+                    <option>Prata 925</option>
+                    <option>Sem banho</option>
+                    <option>Outro</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="label">Qtd. em estoque</label>
+                  <input className="input" type="number" min="0" value={editForm.estoque} onChange={e => setEditForm(f=>({...f,estoque:e.target.value}))} inputMode="numeric" />
+                </div>
+              </div>
+              <div style={{borderTop:'1px solid var(--line)', margin:'14px 0 12px', display:'flex', alignItems:'center', gap:8}}>
+                <span style={{fontSize:11, color:'var(--ink-3)', whiteSpace:'nowrap', background:'var(--surface)', paddingRight:8}}>Composição de custo</span>
+              </div>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10}}>
+                <div className="field">
+                  <label className="label">VL Compra (R$) *</label>
+                  <input className="input" value={editForm.vlCompra} onChange={e => setEditForm(f=>({...f,vlCompra:e.target.value}))} inputMode="decimal" />
+                </div>
+                <div className="field">
+                  <label className="label">Despesa/peça (R$)</label>
+                  <input className="input" value={editForm.despesa} onChange={e => setEditForm(f=>({...f,despesa:e.target.value}))} inputMode="decimal" />
+                </div>
+                <div className="field">
+                  <label className="label">Custo total</label>
+                  <div className="input" style={{background:'var(--bg-deep)', color: editCusto > 0 ? 'var(--ink)' : 'var(--ink-3)', fontWeight:editCusto>0?600:400, cursor:'default'}}>
+                    {editCusto > 0 ? brl(editCusto) : '—'}
+                  </div>
+                </div>
+              </div>
+              <div style={{borderTop:'1px solid var(--line)', margin:'14px 0 12px'}}>
+                <span style={{fontSize:11, color:'var(--ink-3)'}}>Preço de venda</span>
+              </div>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10}}>
+                <div className="field">
+                  <label className="label">VL Venda (R$) *</label>
+                  <input className="input" value={editForm.preco} onChange={e => setEditForm(f=>({...f,preco:e.target.value}))} inputMode="decimal" />
+                </div>
+                <div className="field">
+                  <label className="label">Lucro / peça</label>
+                  <div className="input" style={{background:'var(--bg-deep)', fontWeight:600, cursor:'default',
+                    color: editPrecoNum > 0 && editCusto > 0 ? (editLucro >= 0 ? 'var(--emerald)' : 'var(--danger)') : 'var(--ink-3)'}}>
+                    {editPrecoNum > 0 && editCusto > 0 ? brl(editLucro) : '—'}
+                  </div>
+                </div>
+                <div className="field">
+                  <label className="label">Markup %</label>
+                  <div className="input" style={{background:'var(--bg-deep)', fontWeight:700, cursor:'default',
+                    color: editMarkup === null ? 'var(--ink-3)' : editMarkup >= 100 ? 'var(--emerald)' : editMarkup >= 50 ? 'var(--ink)' : 'var(--danger)'}}>
+                    {editMarkup !== null ? editMarkup.toFixed(0) + '%' : '—'}
+                  </div>
+                </div>
+              </div>
+              {editErro && <div style={{background:'var(--danger-soft)', color:'var(--danger)', borderRadius:8, padding:'8px 12px', fontSize:12, marginTop:12}}>{editErro}</div>}
+              <div style={{display:'flex', gap:8, justifyContent:'flex-end', marginTop:18}}>
+                <button type="button" className="btn" onClick={fecharEditar} disabled={editSalvando}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" disabled={editSalvando}>
+                  {editSalvando ? 'Salvando…' : <><Icon name="check" size={15}/> Salvar alterações</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── CONFIRMAR EXCLUIR ── */}
+      {confirmDel && (
+        <div className="modal-backdrop" onClick={() => setConfirmDel(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:400}}>
+            <h3 className="modal-title">Remover produto?</h3>
+            <p style={{fontSize:13, color:'var(--ink-2)', margin:'0 0 18px'}}>
+              <strong>{confirmDel.nome}</strong> será removido permanentemente. Esta ação não pode ser desfeita.
+            </p>
+            <div style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
+              <button className="btn" onClick={() => setConfirmDel(null)}>Cancelar</button>
+              <button className="btn btn-primary" style={{background:'var(--danger)', borderColor:'var(--danger)'}}
+                onClick={async () => { await onExcluir(confirmDel.id); setConfirmDel(null); }}>
+                Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL IMPORTAR PLANILHA ── */}
+      {importPreview && (
+        <div className="modal-backdrop" onClick={() => !importPreview.salvando && setImportPreview(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:680, width:'100%'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+              <h3 className="modal-title" style={{margin:0}}>Confirmar importação</h3>
+              {!importPreview.salvando && (
+                <button className="btn btn-icon" onClick={() => setImportPreview(null)}><Icon name="close" size={16}/></button>
+              )}
+            </div>
+            <p style={{fontSize:12, color:'var(--ink-3)', marginBottom:12}}>
+              {importPreview.produtos.length} produto{importPreview.produtos.length !== 1 ? 's' : ''} encontrado{importPreview.produtos.length !== 1 ? 's' : ''} na planilha. Revise antes de importar.
+            </p>
+            <div style={{maxHeight:320, overflowY:'auto', marginBottom:16, borderRadius:8, border:'1px solid var(--line)'}}>
+              <table style={{width:'100%', borderCollapse:'collapse', fontSize:12}}>
+                <thead>
+                  <tr style={{background:'var(--bg-deep)', borderBottom:'1px solid var(--line-2)'}}>
+                    <th style={thStyle('left')}>Produto</th>
+                    <th style={thStyle('left')}>Ref.</th>
+                    <th style={thStyle('right')}>VL Compra</th>
+                    <th style={thStyle('right')}>Despesa</th>
+                    <th style={thStyle('right')}>VL Venda</th>
+                    <th style={thStyle('right')}>Markup</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPreview.produtos.map((p, i) => {
+                    const custo = p.vlCompra + p.despesa;
+                    const mk = custo > 0 && p.preco > 0 ? ((p.preco - custo) / custo * 100) : null;
+                    return (
+                      <tr key={i} style={{borderBottom:'1px solid var(--line)', background: i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)'}}>
+                        <td style={tdStyle('left')}>{p.nome}</td>
+                        <td style={tdStyle('left')}><span style={{color:'var(--ink-3)', fontSize:11}}>{p.referencia || '—'}</span></td>
+                        <td style={tdStyle('right')}>{p.vlCompra > 0 ? brl(p.vlCompra) : '—'}</td>
+                        <td style={tdStyle('right')}>{p.despesa > 0 ? brl(p.despesa) : '—'}</td>
+                        <td style={tdStyle('right')}>{p.preco > 0 ? brl(p.preco) : '—'}</td>
+                        <td style={tdStyle('right')}>
+                          {mk !== null ? (
+                            <span style={{fontWeight:700, color: mk >= 100 ? 'var(--emerald)' : mk >= 50 ? 'var(--ink)' : 'var(--danger)'}}>
+                              {mk.toFixed(0)}%
+                            </span>
+                          ) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
+              <button className="btn" onClick={() => setImportPreview(null)} disabled={importPreview.salvando}>Cancelar</button>
+              <button className="btn btn-primary" onClick={confirmarImport} disabled={importPreview.salvando}>
+                {importPreview.salvando ? 'Importando…' : <><Icon name="plus" size={15}/> Importar {importPreview.produtos.length} produto{importPreview.produtos.length !== 1 ? 's' : ''}</>}
+              </button>
+            </div>
           </div>
         </div>
       )}
