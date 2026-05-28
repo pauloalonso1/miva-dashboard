@@ -1209,20 +1209,7 @@ function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedido
       .filter(p => p.estoque <= ESTOQUE_BAIXO)
       .sort((a, b) => a.estoque - b.estoque);
 
-    // análise do catálogo (produtos com custo definido)
-    const comCusto = produtos.filter(p => p.custo > 0 && p.preco > 0);
-    const capitalInvestido = comCusto.reduce((s, p) => s + p.custo * p.estoque, 0);
-    const receitaPotencial = comCusto.reduce((s, p) => s + p.preco * p.estoque, 0);
-    const lucroPotencial   = comCusto.reduce((s, p) => s + (p.preco - p.custo) * p.estoque, 0);
-    const markupMedio = comCusto.length > 0
-      ? comCusto.reduce((s, p) => s + markupPercentual(p.custo, p.preco), 0) / comCusto.length
-      : 0;
-    const topMargem = [...comCusto]
-      .sort((a, b) => markupPercentual(b.custo, b.preco) - markupPercentual(a.custo, a.preco))
-      .slice(0, 5);
-
-    return { bruto, liquido, custo, lucro, ticket, ticketN: doMes.length, canais, pags, maisVendidos, estoqueBaixo,
-             capitalInvestido, receitaPotencial, lucroPotencial, markupMedio, topMargem };
+    return { bruto, liquido, custo, lucro, ticket, ticketN: doMes.length, canais, pags, maisVendidos, estoqueBaixo };
   }, [vendas, produtos]);
 
   const maxCanal = Math.max(dados.canais.online, dados.canais.cidade, 1);
@@ -1356,56 +1343,6 @@ function Painel({ vendas, produtos, setTela, metaMensal, onSetMeta, onSyncPedido
         </section>
       </div>
 
-      {/* Análise do catálogo */}
-      <section className="card" style={{marginTop: 0}}>
-        <h2 className="section-title">Análise do catálogo</h2>
-        <p className="section-sub">Baseado nos produtos cadastrados com custo e preço definidos</p>
-
-        <div className="kpi-grid" style={{marginTop:14}}>
-          <KPI label="Capital investido"  value={dados.capitalInvestido}  note="Custo Total × estoque atual" />
-          <KPI label="Receita potencial"  value={dados.receitaPotencial}  note="se vender todo o estoque" />
-          <KPI label="Lucro potencial"    value={dados.lucroPotencial}    note="receita − custo total" accent />
-          <div className="kpi">
-            <div className="kpi-label">Markup médio</div>
-            <div className="kpi-value" style={{color: dados.markupMedio >= 100 ? 'var(--emerald)' : dados.markupMedio >= 50 ? 'var(--ink)' : 'var(--danger)'}}>
-              {dados.markupMedio.toFixed(0)}<span className="cents">%</span>
-            </div>
-            <div className="kpi-note">lucro / custo total</div>
-          </div>
-        </div>
-
-        {dados.topMargem.length > 0 && (
-          <div style={{marginTop:16}}>
-            <div style={{fontSize:12, fontWeight:600, color:'var(--ink-2)', marginBottom:8}}>Top 5 por markup</div>
-            <div className="list">
-              {dados.topMargem.map(p => {
-                const mk = markupPercentual(p.custo, p.preco);
-                const lucroUn = p.preco - p.custo;
-                return (
-                  <div className="list-item" key={p.id}>
-                    <div className="list-item-main">
-                      <span className="list-item-name">{p.nome}</span>
-                      <span className="list-item-meta">
-                        custo {brl(p.custo)} · venda {brl(p.preco)} · lucro {brl(lucroUn)}/peça
-                      </span>
-                    </div>
-                    <span className="chip" style={{background: mk >= 100 ? 'var(--emerald-soft)' : 'var(--warn-soft)', color: mk >= 100 ? 'var(--emerald)' : 'var(--warn)', fontWeight:700}}>
-                      {mk.toFixed(0)}%
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <button className="btn btn-small" style={{marginTop:12}} onClick={() => setTela('produtos')}>
-              Ver todos os produtos →
-            </button>
-          </div>
-        )}
-
-        {dados.topMargem.length === 0 && (
-          <EstadoVazio titulo="Nenhum produto com custo cadastrado" sub="Cadastre produtos com VL Compra e Preço para ver a análise." />
-        )}
-      </section>
     </div>
   );
 }
