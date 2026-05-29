@@ -2376,6 +2376,9 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
   const [editErro, setEditErro]         = useState('');
   const [editSalvando, setEditSalvando] = useState(false);
   const [confirmDel, setConfirmDel]     = useState(null);
+  const [selecionados, setSelecionados] = useState(new Set());
+  const [confirmDelBatch, setConfirmDelBatch] = useState(false);
+  const [excluindoBatch, setExcluindoBatch]   = useState(false);
   const fileInputRef                    = useRef(null);
   const [importPreview, setImportPreview] = useState(null);
   const [importando, setImportando]     = useState(false);
@@ -2459,6 +2462,25 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
     } finally {
       setImportando(false);
     }
+  };
+
+  const toggleSel = (id) => setSelecionados(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const todosSelec = lista.length > 0 && lista.every(p => selecionados.has(p.id));
+  const algunsSelec = !todosSelec && lista.some(p => selecionados.has(p.id));
+  const toggleTodos = () => setSelecionados(todosSelec ? new Set() : new Set(lista.map(p => p.id)));
+
+  const excluirSelecionados = async () => {
+    setExcluindoBatch(true);
+    for (const id of selecionados) {
+      try { await onExcluir(id); } catch {}
+    }
+    setSelecionados(new Set());
+    setConfirmDelBatch(false);
+    setExcluindoBatch(false);
   };
 
   const confirmarImport = async () => {
@@ -2580,6 +2602,12 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
           <option value="lucro_desc">Maior lucro/peça</option>
           <option value="nome_asc">Nome A→Z</option>
         </select>
+        {selecionados.size > 0 && (
+          <button className="btn btn-primary" onClick={() => setConfirmDelBatch(true)}
+            style={{background:'var(--danger)', borderColor:'var(--danger)', whiteSpace:'nowrap'}}>
+            <Icon name="trash" size={15}/> Excluir {selecionados.size} selecionado{selecionados.size !== 1 ? 's' : ''}
+          </button>
+        )}
         <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={handleImportFile} />
         <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={importando} style={{whiteSpace:'nowrap'}}>
           {importando ? 'Lendo…' : <><Icon name="trending" size={15}/> Importar planilha</>}
@@ -2605,6 +2633,10 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
             <table style={{width:'100%', borderCollapse:'collapse', fontSize:13}}>
               <thead>
                 <tr style={{background:'var(--bg-deep)', borderBottom:'2px solid var(--line-2)'}}>
+                  <th style={{...thStyle('center'), width:36, paddingRight:0}}>
+                    <input type="checkbox" checked={todosSelec} ref={el => { if (el) el.indeterminate = algunsSelec; }}
+                      onChange={toggleTodos} style={{cursor:'pointer', width:15, height:15}} />
+                  </th>
                   <th style={thStyle('left')}>Produto</th>
                   <th style={thStyle('left')}>Fornecedor</th>
                   <th style={thStyle('right')}>VL Compra</th>
@@ -2624,8 +2656,12 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
                   const lucroUn = p.preco - p.custo;
                   const lucroTt = lucroUn * p.estoque;
                   const mkColor = mk >= 100 ? 'var(--emerald)' : mk >= 50 ? 'var(--ink)' : 'var(--danger)';
+                  const isSel = selecionados.has(p.id);
                   return (
-                    <tr key={p.id} style={{borderBottom:'1px solid var(--line)', background: i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)'}}>
+                    <tr key={p.id} style={{borderBottom:'1px solid var(--line)', background: isSel ? 'var(--gold-soft)' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)'}}>
+                      <td style={{...tdStyle('center'), paddingRight:0, width:36}}>
+                        <input type="checkbox" checked={isSel} onChange={() => toggleSel(p.id)} style={{cursor:'pointer', width:15, height:15}} />
+                      </td>
                       <td style={tdStyle('left')}>
                         <div style={{fontWeight:500}}>{p.nome}</div>
                         <div style={{fontSize:11, color:'var(--ink-3)'}}>{p.referencia}{p.tipoBanho ? ' · ' + p.tipoBanho : ''}</div>
@@ -2657,6 +2693,7 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
               </tbody>
               <tfoot>
                 <tr style={{background:'var(--bg-deep)', borderTop:'2px solid var(--line-2)', fontWeight:700}}>
+                  <td></td>
                   <td style={tdStyle('left')} colSpan={2}><span style={{fontSize:12}}>TOTAL · {lista.length} produtos</span></td>
                   <td style={tdStyle('right')}></td>
                   <td style={tdStyle('right')}></td>
@@ -2913,6 +2950,25 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
               <button className="btn btn-primary" style={{background:'var(--danger)', borderColor:'var(--danger)'}}
                 onClick={async () => { await onExcluir(confirmDel.id); setConfirmDel(null); }}>
                 Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CONFIRMAR EXCLUIR EM LOTE ── */}
+      {confirmDelBatch && (
+        <div className="modal-backdrop" onClick={() => !excluindoBatch && setConfirmDelBatch(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:420}}>
+            <h3 className="modal-title">Remover {selecionados.size} produto{selecionados.size !== 1 ? 's' : ''}?</h3>
+            <p style={{fontSize:13, color:'var(--ink-2)', margin:'0 0 18px'}}>
+              Esta ação vai remover <strong>{selecionados.size} produto{selecionados.size !== 1 ? 's' : ''}</strong> permanentemente. Não pode ser desfeita.
+            </p>
+            <div style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
+              <button className="btn" onClick={() => setConfirmDelBatch(false)} disabled={excluindoBatch}>Cancelar</button>
+              <button className="btn btn-primary" style={{background:'var(--danger)', borderColor:'var(--danger)'}}
+                onClick={excluirSelecionados} disabled={excluindoBatch}>
+                {excluindoBatch ? 'Removendo…' : `Remover ${selecionados.size}`}
               </button>
             </div>
           </div>
