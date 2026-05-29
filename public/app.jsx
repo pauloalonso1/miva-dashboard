@@ -2464,10 +2464,19 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
   const confirmarImport = async () => {
     if (!importPreview) return;
     setImportPreview(p => ({ ...p, salvando: true }));
-    for (const p of importPreview.produtos) {
-      try { await onCadastrar(p); } catch {}
+    try {
+      const res = await fetch('/api/import-planilha/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: importPreview.produtos }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao importar.');
+      window.location.reload();
+    } catch (err) {
+      alert(err.message);
+      setImportPreview(p => ({ ...p, salvando: false }));
     }
-    setImportPreview(null);
   };
 
   const submitModal = async (e) => {
@@ -2921,7 +2930,7 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
               )}
             </div>
             <p style={{fontSize:12, color:'var(--ink-3)', marginBottom:12}}>
-              {importPreview.produtos.length} produto{importPreview.produtos.length !== 1 ? 's' : ''} encontrado{importPreview.produtos.length !== 1 ? 's' : ''} na planilha. Revise antes de importar.
+              {importPreview.produtos.length} produto{importPreview.produtos.length !== 1 ? 's' : ''} encontrado{importPreview.produtos.length !== 1 ? 's' : ''} na planilha. Produtos já cadastrados serão atualizados; novos serão criados.
             </p>
             <div style={{maxHeight:320, overflowY:'auto', marginBottom:16, borderRadius:8, border:'1px solid var(--line)'}}>
               <table style={{width:'100%', borderCollapse:'collapse', fontSize:12}}>
@@ -2962,7 +2971,7 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
             <div style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
               <button className="btn" onClick={() => setImportPreview(null)} disabled={importPreview.salvando}>Cancelar</button>
               <button className="btn btn-primary" onClick={confirmarImport} disabled={importPreview.salvando}>
-                {importPreview.salvando ? 'Importando…' : <><Icon name="plus" size={15}/> Importar {importPreview.produtos.length} produto{importPreview.produtos.length !== 1 ? 's' : ''}</>}
+                {importPreview.salvando ? 'Aplicando…' : <><Icon name="check" size={15}/> Aplicar {importPreview.produtos.length} produto{importPreview.produtos.length !== 1 ? 's' : ''}</>}
               </button>
             </div>
           </div>
