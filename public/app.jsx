@@ -2469,9 +2469,6 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
-  const todosSelec = lista.length > 0 && lista.every(p => selecionados.has(p.id));
-  const algunsSelec = !todosSelec && lista.some(p => selecionados.has(p.id));
-  const toggleTodos = () => setSelecionados(todosSelec ? new Set() : new Set(lista.map(p => p.id)));
 
   const excluirSelecionados = async () => {
     setExcluindoBatch(true);
@@ -2557,6 +2554,10 @@ function MargemLucro({ produtos, setTela, onCadastrar, onEditar, onExcluir }) {
       return 0;
     });
   }, [produtos, busca, ordem]);
+
+  const todosSelec = lista.length > 0 && lista.every(p => selecionados.has(p.id));
+  const algunsSelec = !todosSelec && lista.some(p => selecionados.has(p.id));
+  const toggleTodos = () => setSelecionados(todosSelec ? new Set() : new Set(lista.map(p => p.id)));
 
   const totais = useMemo(() => {
     const semFiltro = produtos.filter(p => p.custo > 0 && p.preco > 0);
